@@ -67,3 +67,30 @@ html, body {
   height: 100%;
   background: #ec9f4a;
 }
+
+/* 개발 실행 전용 테스트 버튼 (설치된 앱에는 보이지 않는다) */
+#dev {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 4px;
+}
+
+#dev[hidden] {
+  display: none;
+}
+
+#dev button {
+  padding: 3px 8px;
+  border: 2px solid #2a1f26;
+  border-radius: 6px;
+  background: #fff8ec;
+  color: #2a1f26;
+  font: bold 11px 'Malgun Gothic', sans-serif;
+  cursor: pointer;
+}
+
+#dev button:hover {
+  background: #fde6bd;
+}

@@ -208,19 +208,19 @@ function showMenu(): void {
             enabled: app.isPackaged, // 개발 모드(npm run dev)에서는 등록하지 않는다
             click: (item) => app.setLoginItemSettings({openAtLogin: item.checked})
         },
-        ...(app.isPackaged ? [] : [{label: '테스트 경험치 +30 (개발 전용)', click: addTestXp}]),
+        ...(app.isPackaged ? [] : [{label: '테스트 경험치 +30 (개발 전용)', click: () => addTestXp()}]),
         {type: 'separator'},
         {label: '종료', click: () => app.quit()}
     ]).popup({window: win})
 }
 
-function addTestXp(): void {
+function addTestXp(times = 1): void {
     if (app.isPackaged) return // 설치된 앱에서는 막는다
     ingestUsage([{
         id: `test-${Date.now()}-${Math.random()}`,
         provider: TEST_PROVIDER,
         occurredAt: new Date().toISOString(),
-        totalTokens: TEST_TOKENS,
+        totalTokens: TEST_TOKENS * times,
         source: 'test-menu',
         confidence: 'exact'
     }])
@@ -249,6 +249,11 @@ ipcMain.on('cat:capture', (e, on: unknown) => {
     if (e.sender !== win?.webContents || typeof on !== 'boolean') return
     if (on) win.setIgnoreMouseEvents(false)
     else win.setIgnoreMouseEvents(true, {forward: true})
+})
+// 개발 실행 전용 테스트 버튼. 양은 렌더러가 아니라 여기서 정한다.
+ipcMain.on('cat:testXp', (e, kind: unknown) => {
+    if (e.sender !== win?.webContents || app.isPackaged) return
+    if (kind === 'small' || kind === 'big') addTestXp(kind === 'big' ? 10 : 1)
 })
 ipcMain.on('cat:menu', (e) => {
     if (e.sender === win?.webContents) showMenu()

@@ -13,6 +13,7 @@ const el = document.getElementById('cat') as HTMLDivElement
 const canvas = document.getElementById('sprite') as HTMLCanvasElement
 const zzz = document.getElementById('zzz') as HTMLDivElement
 const bubble = document.getElementById('bubble') as HTMLDivElement
+const dev = document.getElementById('dev') as HTMLDivElement
 const ctx = canvas.getContext('2d')!
 canvas.width = GRID_W
 canvas.height = GRID_H
@@ -80,6 +81,17 @@ document.documentElement.addEventListener('mouseleave', () => void (mouse = null
 
 let b: Behavior = start(window.innerWidth / 2, Math.random)
 
+// 개발 실행(npm run dev)에서만 테스트 경험치 버튼을 보여준다. main도 설치된 앱에서는 요청을 무시한다.
+let overDev = false
+if (import.meta.env.DEV) {
+    dev.hidden = false
+    dev.addEventListener('click', (e) => {
+        const kind = (e.target as HTMLElement).dataset.xp
+        if (kind === 'small' || kind === 'big') window.api.addTestXp(kind)
+    })
+}
+let captured = false // 지금 창이 마우스 클릭을 받고 있는지
+
 document.addEventListener('mousedown', (e) => {
     if (e.button !== 0 || !hover) return
     b = force(b, b.action === 'sleep' ? 'sit' : 'leap', Math.random) // 자고 있으면 깨우고, 아니면 폴짝
@@ -120,9 +132,14 @@ function frame(now: number): void {
     const top = window.innerHeight - GRID_H * P + s.box.t * P - lift
 
     const over = mouse !== null && mouse.x >= left - 6 && mouse.x <= left + width + 6 && mouse.y >= top - 6 && mouse.y <= window.innerHeight
-    if (over !== hover) {
-        hover = over
-        window.api.capture(hover)
+    hover = over
+    if (!dev.hidden && mouse) {
+        const r = dev.getBoundingClientRect()
+        overDev = mouse.x >= r.left && mouse.x <= r.right && mouse.y >= r.top && mouse.y <= r.bottom
+    }
+    if ((hover || overDev) !== captured) {
+        captured = hover || overDev
+        window.api.capture(captured)
     }
 
     if (hover && (b.action === 'walk' || b.action === 'run')) b = force(b, 'sit', Math.random)

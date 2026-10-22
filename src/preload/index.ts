@@ -16,7 +16,9 @@ const api = {
     },
     // 고양이 위에 마우스가 있을 때만 창이 클릭을 받는다
     capture: (on: boolean): void => ipcRenderer.send('cat:capture', on),
-    openMenu: (): void => ipcRenderer.send('cat:menu')
+    openMenu: (): void => ipcRenderer.send('cat:menu'),
+    // 개발 실행 전용 테스트 경험치 (양은 main이 정한다)
+    addTestXp: (kind: 'small' | 'big'): void => ipcRenderer.send('cat:testXp', kind)
 }
 
 contextBridge.exposeInMainWorld('api', api)
