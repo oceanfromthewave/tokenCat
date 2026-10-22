@@ -433,10 +433,8 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(front - 3, m.feet[1], false) // 먼 쪽 다리는 짙게
     leg(back + 3, m.feet[3], false)
 
-    // 몸통
-    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.6) // 끝이 둥근 콩 모양 몸통 (지수 2면 양끝이 뾰족해 생선처럼 보인다)
-    g.ellipse(bx - d.rx * 0.5, by + 0.5, d.rx * 0.45, d.ry * 1.05, 'b', 'body') // 통통한 엉덩이
-    g.ellipse(bx + d.rx - 5, by - d.ry * 0.3, 5, d.ry * 0.8, 'b', 'body') // 목
+    // 몸통: 엉덩이·목 타원을 따로 겹치지 않아 허리가 잘록해 보이지 않게 한다.
+    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body')
     g.retag(bx - d.rx, by + d.ry * 0.4, bx + d.rx, by + d.ry, 'body', 'under') // 배
     g.retag(bx + d.rx * 0.55, by - d.ry * 0.3, bx + d.rx, by + d.ry * 0.4, 'body', 'chest') // 가슴
 
@@ -462,9 +460,8 @@ function sit(g: Grid, d: Dim, o: { tail: number; lick?: number; happy?: boolean 
         pts.push([X(-8) - i, GY - d.tw - curl])
     }
     tailDraw(g, d, pts)
-    g.at('body')
-    g.ellipse(X(-3), Y(5), 7.5 * s, 5.5 * s, 'b') // 엉덩이
-    g.ellipse(X(2), Y(8), 4.5 * s + 0.5, 8 * s, 'b') // 몸통
+    // 엉덩이와 몸통을 한 덩어리의 완만한 타원으로 그려 가운데가 꺾이지 않게 한다.
+    g.at('body').ellipse(X(-0.5), Y(7.5), 7.5 * s, 9 * s, 'b', 'body')
     g.retag(X(-11), Y(3.5), X(8), GY, 'body', 'under')
     const lx0 = Math.round(X(1.5)), lx1 = Math.round(X(5.5)), mid = Math.round(X(3.5))
     if (o.lick) {
@@ -499,9 +496,8 @@ function stretch(g: Grid, d: Dim, frame: number): void {
     // 꼬리는 바닥으로 늘어뜨린다
     const L = Math.max(5, Math.round(d.tail * 0.6))
     tailDraw(g, d, Array.from({length: L}, (_, i): [number, number] => [X(-6) - i, GY - d.tw - Math.max(0, i - L + 3)]))
-    g.at('body')
-    g.ellipse(X(-2.5), Y(4.5), 6 * s, 4.5 * s, 'b') // 엉덩이
-    g.ellipse(X(1), Y(12), 4 * s + 0.5, 8.5 * s, 'b') // 세운 몸통
+    // 허리와 엉덩이 윤곽이 끊기지 않는 세로 타원형 몸통.
+    g.at('body').ellipse(X(0), Y(11), 6.2 * s, 9 * s, 'b', 'body')
     g.retag(X(-9), Y(3), X(6), GY, 'body', 'under')
     g.rect(Math.round(X(-1)), Y(3), Math.round(X(2)), GY, 'b', 'leg') // 뒷발
     g.rect(Math.round(X(-1)), GY - 1, Math.round(X(2)), GY, 'b', 'paw')

@@ -1,6 +1,6 @@
 {
   "name": "tokencat",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "AI 사용 기록으로 키우는 작업표시줄 고양이",
   "main": "./out/main/index.js",
   "scripts": {
