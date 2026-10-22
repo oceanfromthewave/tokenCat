@@ -1,6 +1,6 @@
 // 실행: npm test
 import assert from 'node:assert/strict'
-import {COATS, INITIAL_CAT, STAGES, addXp, newCat, stageOf, xpToNextLevel} from './growth.ts'
+import {COATS, GEAR, GEAR_LEVEL, HARVEST_LEVEL, INITIAL_CAT, STAGES, addXp, grantGear, harvestIfReady, newCat, stageOf, xpToNextLevel} from './growth.ts'
 
 // 레벨업 경계: 100xp면 정확히 레벨 2, 99.9는 그대로
 assert.deepEqual(addXp(INITIAL_CAT, 100), {...INITIAL_CAT, level: 2, xp: 0})
@@ -32,5 +32,23 @@ for (const c of COATS) {
 assert.equal(newCat(() => 1).coat, COATS[COATS.length - 1].id)
 assert.equal(newCat(() => -1).coat, COATS[0].id)
 assert.equal(new Set(COATS.map((c) => c.id)).size, COATS.length) // 중복 id 없음
+
+// 소품: 레벨이 되기 전에는 없고, 되면 칸마다 하나. 한 번 받으면 바뀌지 않는다
+assert.deepEqual(newCat(() => 0.5).gear, {})
+assert.equal(grantGear({...INITIAL_CAT, level: GEAR_LEVEL.neck - 1}).gear.neck, undefined)
+const lv3 = grantGear({...INITIAL_CAT, level: GEAR_LEVEL.neck}, () => 0)
+assert.deepEqual(lv3.gear, {neck: GEAR.neck[0].id})
+assert.equal(grantGear(lv3, () => 0.99), lv3) // 이미 있으면 그대로 (같은 객체)
+const lv9 = grantGear({...lv3, level: GEAR_LEVEL.head}, () => 0.999999)
+assert.deepEqual(lv9.gear, {neck: GEAR.neck[0].id, tail: GEAR.tail[GEAR.tail.length - 1].id, head: GEAR.head[GEAR.head.length - 1].id})
+assert.ok(GEAR_LEVEL.head < HARVEST_LEVEL)
+
+// 다 크면 도감에 올라가고(무늬, 소품, 시각) 새 고양이가 시작된다
+const grown = {...lv9, level: HARVEST_LEVEL, coat: 'bengal' as const}
+const h = harvestIfReady(grown, [], '2026-10-22T00:00:00Z', () => 0)
+assert.deepEqual(h.collection, [{coat: 'bengal', gear: lv9.gear, completedAt: '2026-10-22T00:00:00Z'}])
+assert.deepEqual(h.cat, {level: 1, xp: 0, coat: COATS[0].id, gear: {}})
+const not = harvestIfReady({...grown, level: HARVEST_LEVEL - 1}, [], 'x')
+assert.equal(not.collection.length, 0)
 
 console.log('growth: all checks passed')

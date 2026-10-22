@@ -1,4 +1,4 @@
-import {INITIAL_CAT, addXp, isCoatId, type CatState} from './growth.ts'
+import {INITIAL_CAT, SLOTS, addXp, isCoatId, isGearId, type CatState, type Completed, type Gear} from './growth.ts'
 
 // 사용자 설정. 저장 파일에서 읽을 때도, 화면(IPC)에서 바꿀 때도 항상 mergeSettings로 검증한다.
 export interface Settings {
@@ -22,14 +22,25 @@ export function mergeSettings(current: Settings, patch: unknown): Settings {
 // 디스크에 저장하는 데이터 형식. 파일은 외부에서 바뀌거나 깨질 수 있으니 읽을 때 반드시 검증한다.
 export interface SaveData {
     cat: CatState
+    collection: Completed[] // 다 키워서 도감에 올린 고양이
     processed: string[] // 이미 경험치로 반영한 사용 기록 키 (중복 보상 방지)
     settings: Settings
     logOffsets: Record<string, number> | null // 로그 파일별 읽은 위치. null = 아직 기준선 없음(첫 실행)
 }
 
-export const EMPTY_SAVE: SaveData = {cat: INITIAL_CAT, processed: [], settings: DEFAULT_SETTINGS, logOffsets: null}
+export const EMPTY_SAVE: SaveData = {cat: INITIAL_CAT, collection: [], processed: [], settings: DEFAULT_SETTINGS, logOffsets: null}
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
+
+// 소품은 칸마다 알려진 id만 받는다
+function parseGear(v: unknown): Gear {
+    const gear: Record<string, string> = {}
+    if (v && typeof v === 'object') for (const slot of SLOTS) {
+        const id = (v as Record<string, unknown>)[slot]
+        if (isGearId(slot, id)) gear[slot] = id
+    }
+    return gear as Gear
+}
 
 // 저장 파일 내용을 SaveData로 바꾼다. 형식이 이상하면 새로 시작(EMPTY_SAVE)한다.
 export function parseSave(text: string): SaveData {
@@ -51,8 +62,15 @@ export function parseSave(text: string): SaveData {
                 if (k.length <= 500 && isNum(v) && v >= 0) logOffsets[k] = v
             }
         }
+        const collection: Completed[] = Array.isArray(raw.collection)
+            ? raw.collection
+                .filter((c: unknown): c is Completed => !!c && typeof c === 'object' && isCoatId((c as Completed).coat) &&
+                    typeof (c as Completed).completedAt === 'string' && (c as Completed).completedAt.length <= 40)
+                .slice(0, 10_000)
+                .map((c: Completed) => ({coat: c.coat, gear: parseGear(c.gear), completedAt: c.completedAt}))
+            : []
         // 레벨 기준보다 xp가 크면 레벨업으로 정리
-        return {cat: addXp({level, xp: 0, coat}, xp), processed, settings: mergeSettings(DEFAULT_SETTINGS, raw.settings), logOffsets}
+        return {cat: addXp({level, xp: 0, coat, gear: parseGear(raw.cat.gear)}, xp), collection, processed, settings: mergeSettings(DEFAULT_SETTINGS, raw.settings), logOffsets}
     } catch {
         return EMPTY_SAVE
     }

@@ -1,6 +1,6 @@
 // 실행: npm test
 import assert from 'node:assert/strict'
-import {COATS, STAGES} from './growth.ts'
+import {COATS, GEAR, STAGES} from './growth.ts'
 import {FRAMES, GRID_H, GRID_W, frameOf, paletteOf, type Pose} from './sprites.ts'
 
 // 모든 털 x 단계 x 포즈 x 프레임: 크기가 맞고, 정의되지 않은 글자가 없고, 빈 그림이 아니며, 가장자리가 잘리지 않는다
@@ -25,6 +25,19 @@ for (const coat of COATS) {
         }
     }
 }
+// 소품: 모든 소품 조합 x 단계 x 포즈에서 잘리지 않고, 알 수 없는 글자가 없으며, 실제로 그림이 바뀐다
+const palette = paletteOf('orange')
+for (let i = 0; i < GEAR.head.length; i++) {
+    const gear = {neck: GEAR.neck[i % GEAR.neck.length].id, tail: GEAR.tail[i % GEAR.tail.length].id, head: GEAR.head[i].id}
+    for (const st of STAGES) for (const pose of Object.keys(FRAMES) as Pose[]) for (let f = 0; f < FRAMES[pose]; f++) {
+        const rows = frameOf(st.id, 'orange', pose, f, gear)
+        const tag = `${JSON.stringify(gear)}/${st.id}/${pose}${f}`
+        for (const ch of rows.join('')) assert.ok(ch === '.' || ch in palette, `${tag}: 알 수 없는 글자 '${ch}'`)
+        assert.ok(rows[0] === '.'.repeat(GRID_W) && rows.every((r) => r[0] === '.' && r[GRID_W - 1] === '.'), `${tag}: 잘림`)
+    }
+    assert.notDeepEqual(frameOf('adult', 'orange', 'walk', 0, gear), frameOf('adult', 'orange', 'walk', 0))
+}
+
 // 프레임 번호는 순환한다
 assert.deepEqual(frameOf('adult', 'orange', 'walk', 5), frameOf('adult', 'orange', 'walk', 1))
 // 성장하면 모습이 달라진다

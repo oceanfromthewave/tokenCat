@@ -1,8 +1,9 @@
 import {contextBridge, ipcRenderer} from 'electron'
-import type {CatState} from '../shared/growth'
+import type {CatState, Completed} from '../shared/growth'
 
 export interface AppState {
     cat: CatState
+    collection: Completed[] // 다 키워서 도감에 올린 고양이
     gainedXp?: number // 이번 변경으로 얻은 경험치 (알림 표시용)
 }
 
@@ -17,6 +18,7 @@ const api = {
     // 고양이 위에 마우스가 있을 때만 창이 클릭을 받는다
     capture: (on: boolean): void => ipcRenderer.send('cat:capture', on),
     openMenu: (): void => ipcRenderer.send('cat:menu'),
+    openDex: (): void => ipcRenderer.send('dex:open'),
     // 개발 실행 전용 테스트 경험치 (양은 main이 정한다)
     addTestXp: (kind: 'small' | 'big'): void => ipcRenderer.send('cat:testXp', kind)
 }

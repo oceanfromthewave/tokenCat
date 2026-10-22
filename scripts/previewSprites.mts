@@ -3,12 +3,14 @@
 import {mkdirSync, writeFileSync} from 'node:fs'
 import {dirname} from 'node:path'
 import {deflateSync} from 'node:zlib'
-import {COATS, STAGES, isCoatId} from '../src/shared/growth.ts'
+import {COATS, GEAR, SLOTS, STAGES, isCoatId, type Gear} from '../src/shared/growth.ts'
 import {FRAMES, GRID_H, GRID_W, frameOf, paletteOf, type Pose} from '../src/shared/sprites.ts'
 
 const out = process.argv[2] ?? 'dist/sprite-preview.png'
 const arg = process.argv[3] ?? 'orange'
 const coats = arg === 'all' ? COATS.map((c) => c.id) : arg.split(',').filter(isCoatId)
+// GEAR=bell,ribbonPink,straw 처럼 소품을 입혀 볼 수 있다
+const gear: Gear = Object.fromEntries((process.env.GEAR ?? '').split(',').flatMap((id) => SLOTS.filter((sl) => GEAR[sl].some((g) => g.id === id)).map((sl) => [sl, id])))
 const POSES = (Object.keys(FRAMES) as Pose[]).filter((p) => !process.env.POSE || process.env.POSE.split(',').includes(p))
 const COLS = POSES.flatMap((p) => Array.from({length: FRAMES[p]}, (_, f) => [p, f] as const))
 
@@ -36,7 +38,7 @@ cells.forEach(({coat, stage, pose, frame}, n) => {
     const ox = col * CW, oy = row * CH
     const bg = (row + col) % 2 ? [0x5a, 0x66, 0x7a] : [0x6b, 0x78, 0x8c] // 칸 구분용 바둑판
     for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) put(ox + x, oy + y, bg)
-    frameOf(stage, coat, pose, frame).forEach((line, gy) => [...line].forEach((ch, gx) => {
+    frameOf(stage, coat, pose, frame, gear).forEach((line, gy) => [...line].forEach((ch, gx) => {
         if (!palette[ch]) return
         for (let y = 0; y < SCALE; y++) for (let x = 0; x < SCALE; x++) put(ox + PAD + gx * SCALE + x, oy + PAD + gy * SCALE + y, hex(palette[ch]))
     }))

@@ -45,6 +45,10 @@ for (let i = 0; i < 300; i++) {
 }
 // 난수가 경계값(0, 1에 가까움)이어도 유효한 행동을 돌려준다
 for (const r of [0, 0.999999]) assert.ok(['sit', 'walk', 'run', 'groom', 'sleep', 'leap'].includes(pickNext('sit', calm, () => r)))
+// 웃기(happy)는 클릭으로만: 저절로 고르지 않고, 끝나면 다른 행동으로 넘어간다
+for (let i = 0; i < 300; i++) assert.notEqual(pickNext(i % 2 ? 'walk' : 'happy', calm, seeded(i)), 'happy')
+const happy = force(edge, 'happy', seeded(5))
+assert.equal(step(happy, 0.5, bounds, seeded(6), calm).x, edge.x) // 웃는 동안은 제자리
 
 // 강제 변경: 시간 초기화, 뛰기는 정해진 시간
 const jumped = force(edge, 'leap', seeded(4))

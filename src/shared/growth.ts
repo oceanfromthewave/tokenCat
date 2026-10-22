@@ -44,13 +44,46 @@ export const isCoatId = (v: unknown): v is CoatId => COATS.some((c) => c.id === 
 
 export const coatName = (id: CoatId): string => COATS.find((c) => c.id === id)?.name ?? id
 
+// 소품. 정해진 레벨이 되면 칸마다 하나씩 무작위로 얻고, 다 클 때까지 계속 하고 다닌다.
+export const GEAR = {
+    neck: [
+        {id: 'bell', name: '방울 목걸이'},
+        {id: 'bandana', name: '반다나'},
+        {id: 'bowtie', name: '나비넥타이'}
+    ],
+    tail: [
+        {id: 'ribbonPink', name: '분홍 리본'},
+        {id: 'ribbonMint', name: '민트 리본'},
+        {id: 'ribbonYellow', name: '노랑 리본'}
+    ],
+    head: [
+        {id: 'straw', name: '밀짚모자'},
+        {id: 'crown', name: '왕관'},
+        {id: 'party', name: '고깔모자'},
+        {id: 'beret', name: '베레모'},
+        {id: 'flower', name: '꽃 핀'}
+    ]
+} as const
+
+export type Slot = keyof typeof GEAR
+export type GearId<S extends Slot = Slot> = (typeof GEAR)[S][number]['id']
+export type Gear = { [S in Slot]?: GearId<S> }
+
+// 이 레벨이 되면 그 칸의 소품을 얻는다
+export const GEAR_LEVEL: Record<Slot, number> = {neck: 3, tail: 6, head: 9}
+export const SLOTS = Object.keys(GEAR_LEVEL) as Slot[]
+
+export const isGearId = <S extends Slot>(slot: S, v: unknown): v is GearId<S> => GEAR[slot].some((g) => g.id === v)
+export const gearName = (slot: Slot, id: string): string => GEAR[slot].find((g) => g.id === id)?.name ?? id
+
 export interface CatState {
     level: number
     xp: number // 현재 레벨에서 쌓인 경험치 (소수로 쌓인다)
     coat: CoatId
+    gear: Gear
 }
 
-export const INITIAL_CAT: CatState = {level: 1, xp: 0, coat: 'orange'}
+export const INITIAL_CAT: CatState = {level: 1, xp: 0, coat: 'orange', gear: {}}
 
 // 새 고양이. rand는 테스트에서 값을 고정하려고 바꿀 수 있다.
 export function newCat(rand: () => number = Math.random): CatState {
@@ -58,9 +91,36 @@ export function newCat(rand: () => number = Math.random): CatState {
     let r = Math.min(Math.max(rand(), 0), 0.999999999) * total
     for (const c of COATS) {
         r -= c.weight
-        if (r < 0) return {level: 1, xp: 0, coat: c.id}
+        if (r < 0) return {level: 1, xp: 0, coat: c.id, gear: {}}
     }
-    return {level: 1, xp: 0, coat: COATS[COATS.length - 1].id}
+    return {level: 1, xp: 0, coat: COATS[COATS.length - 1].id, gear: {}}
+}
+
+// 레벨이 된 칸 중 아직 비어 있는 칸에 소품을 하나씩 준다. 이미 있는 소품은 바꾸지 않는다.
+export function grantGear(cat: CatState, rand: () => number = Math.random): CatState {
+    let gear = cat.gear
+    for (const slot of SLOTS) {
+        if (cat.level < GEAR_LEVEL[slot] || gear[slot]) continue
+        const list = GEAR[slot]
+        gear = {...gear, [slot]: list[Math.min(Math.floor(Math.max(rand(), 0) * list.length), list.length - 1)].id}
+    }
+    return gear === cat.gear ? cat : {...cat, gear}
+}
+
+// 다 키운 고양이 (도감에 보관)
+export interface Completed {
+    coat: CoatId
+    gear: Gear
+    completedAt: string // ISO 시각
+}
+
+// 이 레벨이 되면 다 큰 것으로 보고 도감에 올린 뒤 새 고양이를 시작한다.
+export const HARVEST_LEVEL = 12
+
+// ponytail: 다 크는 순간 넘친 경험치는 버린다. 한 번에 수천 xp가 들어오는 일은 드물어서 이월은 생략.
+export function harvestIfReady(cat: CatState, collection: Completed[], now: string, rand: () => number = Math.random): { cat: CatState; collection: Completed[] } {
+    if (cat.level < HARVEST_LEVEL) return {cat, collection}
+    return {cat: newCat(rand), collection: [...collection, {coat: cat.coat, gear: cat.gear, completedAt: now}]}
 }
 
 // 화면 표시용. 소수 첫째 자리까지 버림. (경험치는 소수로 쌓이므로 정수만 보이면 오르는 게 안 보인다)

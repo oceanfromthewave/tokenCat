@@ -39,6 +39,23 @@ html, body {
   100% { opacity: 0; transform: translateY(-14px); }
 }
 
+/* 클릭하면 떠오르는 하트 */
+.heart {
+  position: absolute;
+  color: #ff6f9c;
+  font-size: 14px;
+  text-shadow: 0 0 2px #2a1f26, 0 0 2px #2a1f26;
+  pointer-events: none;
+  opacity: 0;
+  animation: heart 1.2s ease-out forwards;
+}
+
+@keyframes heart {
+  0% { opacity: 0; transform: translateY(6px) scale(0.6); }
+  25% { opacity: 1; transform: translateY(0) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-26px) scale(0.9); }
+}
+
 #bubble {
   position: absolute;
   display: none;
@@ -94,3 +111,52 @@ html, body {
 #dev button:hover {
   background: #fde6bd;
 }
+
+/* ---- 도감 창 ---- */
+body.dex {
+  height: auto;
+  overflow: auto;
+  padding: 18px 20px 28px;
+  background: #f7f0e4;
+  color: #2a1f26;
+  user-select: text;
+}
+
+body.dex h1 { margin: 0; font-size: 22px; }
+body.dex h2 { margin: 18px 0 8px; font-size: 15px; }
+body.dex .sub, body.dex .muted { margin: 4px 0; color: #7a6a5c; font-size: 13px; }
+body.dex canvas.cat { image-rendering: pixelated; display: block; }
+
+body.dex .now {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 4px 12px 10px;
+  border: 2px solid #2a1f26;
+  border-radius: 10px;
+  background: #fffaf2;
+}
+body.dex .now h2 { grid-column: 1 / -1; }
+body.dex .now p { margin: 4px 0; font-size: 13px; }
+
+body.dex .grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 8px;
+  margin-top: 16px;
+}
+body.dex .card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px 8px;
+  border: 2px solid #2a1f26;
+  border-radius: 10px;
+  background: #fffaf2;
+  font-size: 12px;
+  text-align: center;
+}
+body.dex .card.locked { background: #e6ddd0; color: #8a7b6c; }
+body.dex .card small { color: #7a6a5c; }
+body.dex .history p { margin: 3px 0; font-size: 13px; }

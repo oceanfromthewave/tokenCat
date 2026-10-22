@@ -1,5 +1,6 @@
 // 고양이가 작업표시줄 위에서 무엇을 할지 정하는 순수 규칙. 화면(DOM)을 모르고 시간(초)과 난수만 받는다.
-export type Action = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap'
+// happy는 클릭했을 때만 한다 (웃으면서 하트)
+export type Action = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap' | 'happy'
 
 export interface Behavior {
     action: Action
@@ -28,7 +29,7 @@ type Rand = () => number
 
 // 행동별 지속 시간 범위(초)
 const DURATION: Record<Action, [number, number]> = {
-    sit: [3, 8], walk: [3, 9], run: [1.5, 4], groom: [3, 5], sleep: [12, 40], leap: [LEAP_SECONDS, LEAP_SECONDS]
+    sit: [3, 8], walk: [3, 9], run: [1.5, 4], groom: [3, 5], sleep: [12, 40], leap: [LEAP_SECONDS, LEAP_SECONDS], happy: [2.5, 2.5]
 }
 
 const between = ([a, b]: [number, number], rand: Rand): number => a + (b - a) * rand()
@@ -36,11 +37,11 @@ const between = ([a, b]: [number, number], rand: Rand): number => a + (b - a) * 
 // 다음 행동의 가중치. 같은 행동을 연달아 하지 않는다(걷기 제외).
 function weights(from: Action, mood: Mood): Record<Action, number> {
     const w: Record<Action, number> = mood.excited
-        ? {sit: 5, walk: 25, run: 45, groom: 0, sleep: 0, leap: 25}
+        ? {sit: 5, walk: 25, run: 45, groom: 0, sleep: 0, leap: 25, happy: 0}
         : mood.sleepy
-            ? {sit: 25, walk: 15, run: 0, groom: 10, sleep: 45, leap: 0}
-            : {sit: 20, walk: 40, run: 12, groom: 12, sleep: 8, leap: 8}
-    if (from === 'sleep') return {sit: 70, walk: 30, run: 0, groom: 0, sleep: 0, leap: 0} // 자고 일어나면 기지개 대신 일단 앉는다
+            ? {sit: 25, walk: 15, run: 0, groom: 10, sleep: 45, leap: 0, happy: 0}
+            : {sit: 20, walk: 40, run: 12, groom: 12, sleep: 8, leap: 8, happy: 0}
+    if (from === 'sleep') return {sit: 70, walk: 30, run: 0, groom: 0, sleep: 0, leap: 0, happy: 0} // 자고 일어나면 기지개 대신 일단 앉는다
     if (from !== 'walk') w[from] = 0
     return w
 }

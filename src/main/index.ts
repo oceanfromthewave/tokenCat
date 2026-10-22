@@ -1,7 +1,7 @@
 import {app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, shell, Tray} from 'electron'
 import {autoUpdater} from 'electron-updater'
 import {join} from 'path'
-import {INITIAL_CAT, newCat, type CatState} from '../shared/growth'
+import {INITIAL_CAT, coatName, grantGear, harvestIfReady, newCat, type CatState, type Completed} from '../shared/growth'
 import {EMPTY_SAVE, DEFAULT_SETTINGS, mergeSettings, type Settings} from '../shared/save'
 import {TOKENS_PER_XP, applyUsage, type UsageRecord} from '../shared/usage'
 import {RELEASES_API, isNewer, parseLatestRelease} from '../shared/version'
@@ -16,15 +16,17 @@ const POLL_MS = 30_000
 
 // 고양이 상태의 단일 출처. 렌더러는 IPC로 읽고 변경 알림을 받는다.
 let cat: CatState = INITIAL_CAT
+let collection: Completed[] = [] // 다 키워서 도감에 올린 고양이
 let processed: string[] = []
 let logOffsets: Offsets | null = null
 let settings: Settings = DEFAULT_SETTINGS
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
+let dexWin: BrowserWindow | null = null
 let askedVersion: string | null = null // 이번 실행에서 이미 물어본 버전 (같은 버전을 반복해서 묻지 않는다)
 
 function persist(): void {
-    writeSave({cat, processed, settings, logOffsets})
+    writeSave({cat, collection, processed, settings, logOffsets})
 }
 
 // 작업표시줄 바로 위, 주 모니터 작업 영역의 가로 전체. (작업표시줄이 어디에 있든 작업 영역 아래쪽을 따라간다)
@@ -64,8 +66,42 @@ function fitToTaskbar(): void {
     if (b.x !== cur.x || b.y !== cur.y || b.width !== cur.width || b.height !== cur.height) win.setBounds(b)
 }
 
-const getState = (): { cat: CatState } => ({cat})
-const send = (channel: string, payload: unknown): void => win?.webContents.send(channel, payload)
+const getState = (): { cat: CatState; collection: Completed[] } => ({cat, collection})
+const send = (channel: string, payload: unknown): void => {
+    for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload)
+}
+
+// 레벨에 맞는 소품을 주고, 다 컸으면 도감에 올린 뒤 새 고양이를 시작한다. 다 컸으면 true.
+function settle(): boolean {
+    cat = grantGear(cat)
+    const before = cat
+    const r = harvestIfReady(cat, collection, new Date().toISOString())
+    if (r.cat === cat) return false
+    cat = r.cat
+    collection = r.collection
+    tray?.setImage(trayIcon(cat.coat))
+    if (Notification.isSupported()) new Notification({title: '고양이가 다 컸어요!', body: `${coatName(before.coat)}이(가) 도감에 올라갔어요. 새 고양이가 왔어요.`}).show()
+    return true
+}
+
+// 도감 창. 다 키운 고양이와 찾은 품종을 보여준다.
+function openDex(): void {
+    if (dexWin) {
+        dexWin.focus()
+        return
+    }
+    dexWin = new BrowserWindow({
+        width: 560,
+        height: 680,
+        title: 'Token Cat 도감',
+        autoHideMenuBar: true,
+        webPreferences: {preload: join(__dirname, '../preload/index.js')}
+    })
+    const devUrl = process.env['ELECTRON_RENDERER_URL']
+    if (devUrl) void dexWin.loadURL(`${devUrl}#dex`)
+    else void dexWin.loadFile(join(__dirname, '../renderer/index.html'), {hash: 'dex'})
+    dexWin.on('closed', () => (dexWin = null))
+}
 
 // 사용 기록 반영의 유일한 입구. 실제 AI 연동부(adapter)도 이 함수로 기록을 넘긴다.
 function ingestUsage(records: UsageRecord[]): void {
@@ -73,8 +109,9 @@ function ingestUsage(records: UsageRecord[]): void {
     const changed = result.processed !== processed
     cat = result.cat
     processed = result.processed
+    const harvested = settle()
     persist() // 읽은 위치(logOffsets)도 함께 저장된다
-    if (changed) send('state:changed', {...getState(), gainedXp: result.gainedXp})
+    if (changed || harvested) send('state:changed', {...getState(), gainedXp: result.gainedXp})
 }
 
 // 이 폴더의 로그를 이미 한 번 확인(기준선을 저장)했는지. 도구별로 따로 판단해서, 나중에 지원하게 된 도구도
@@ -199,6 +236,8 @@ function showMenu(): void {
         {label: 'Claude Code 기록 읽기', type: 'checkbox', checked: settings.claude, click: toggle('claude')},
         {label: 'Codex 기록 읽기', type: 'checkbox', checked: settings.codex, click: toggle('codex')},
         {type: 'separator'},
+        {label: '도감 열기', click: openDex},
+        {type: 'separator'},
         {label: '업데이트 확인', click: () => void checkForUpdate(true)},
         {label: '새 버전 자동 확인', type: 'checkbox', checked: settings.updateCheck, click: toggle('updateCheck')},
         {
@@ -237,6 +276,7 @@ function createTray(): void {
     tray.on('click', toggle)
     tray.on('right-click', () => tray?.popUpContextMenu(Menu.buildFromTemplate([
         {label: win?.isVisible() ? '고양이 숨기기' : '고양이 보이기', click: toggle},
+        {label: '도감 열기', click: openDex},
         {label: '업데이트 확인', click: () => void checkForUpdate(true)},
         {type: 'separator'},
         {label: '종료', click: () => app.quit()}
@@ -255,6 +295,7 @@ ipcMain.on('cat:testXp', (e, kind: unknown) => {
     if (e.sender !== win?.webContents || app.isPackaged) return
     if (kind === 'small' || kind === 'big') addTestXp(kind === 'big' ? 10 : 1)
 })
+ipcMain.on('dex:open', openDex)
 ipcMain.on('cat:menu', (e) => {
     if (e.sender === win?.webContents) showMenu()
 })
@@ -269,6 +310,8 @@ if (!app.requestSingleInstanceLock()) {
         settings = save.settings
         processed = save.processed
         logOffsets = save.logOffsets
+        collection = save.collection
+        settle() // 저장된 레벨에 맞는 소품을 주고, 이미 다 컸으면 도감에 올린다
         createWindow()
         createTray()
         screen.on('display-added', fitToTaskbar)

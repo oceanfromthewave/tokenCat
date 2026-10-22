@@ -2,9 +2,9 @@
 // 모든 칸에는 "어느 부위인지" 이름표(part)가 붙고, 마지막에 털 무늬 규칙이 부위별로 색을 입힌다.
 // 그래서 같은 걷기/뛰기 그림에 14가지 털 무늬와 4단계 몸 크기가 그대로 적용된다.
 // 몸은 옆모습(오른쪽을 봄), 얼굴은 정면이다. 왼쪽을 볼 때는 화면에서 뒤집는다.
-import type {CoatId, StageId} from './growth.ts'
+import type {CoatId, Gear, StageId} from './growth.ts'
 
-export type Pose = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap'
+export type Pose = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap' | 'happy'
 
 export const GRID_W = 56
 export const GRID_H = 44
@@ -12,7 +12,7 @@ const GY = GRID_H - 2 // 발바닥 줄 (아래 한 줄은 테두리용)
 const AX = 27 // 몸의 가운데
 
 // 포즈별 프레임 수
-export const FRAMES: Record<Pose, number> = {sit: 2, walk: 4, run: 4, sleep: 2, groom: 2, leap: 1}
+export const FRAMES: Record<Pose, number> = {sit: 2, walk: 4, run: 4, sleep: 2, groom: 2, leap: 1, happy: 2}
 
 // 단계별 몸 크기. 머리는 크기가 거의 그대로라서, 아기일수록 몸에 비해 머리가 크고 어른이 될수록 몸이 길고 늠름해진다.
 interface Dim {
@@ -88,6 +88,17 @@ const COATS: Record<CoatId, Coat> = {
 const mix = (a: string, b: string, t: number): string =>
     '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('')
 
+// 소품 색 (털 무늬와 상관없이 같다)
+const GEAR_COLORS: Record<string, string> = {
+    C: '#e0464e', c: '#a8323a', // 빨강
+    G: '#f6c945', g: '#c99a2e', // 금색
+    K: '#3f7fd8', // 파랑
+    W: '#ffffff',
+    P: '#ff8fbf', M: '#55d3b0', Y: '#ffd447', // 리본, 고깔모자
+    T: '#ecc879', t: '#b88a43', // 밀짚
+    V: '#7b5ad6', v: '#5b3fae' // 베레모
+}
+
 // 윤곽선은 검은색 하나 대신, 닿아 있는 털 색을 짙게 한 색으로 그린다. (대문자 B S D L A = b s d l a 옆의 윤곽선)
 export const paletteOf = (coat: CoatId): Record<string, string> => ({
     ...COATS[coat].colors,
@@ -97,6 +108,7 @@ export const paletteOf = (coat: CoatId): Record<string, string> => ({
     D: mix(COATS[coat].colors.d, '#2a1f26', 0.55),
     L: mix(COATS[coat].colors.l, '#2a1f26', 0.5),
     A: mix(COATS[coat].colors.a, '#2a1f26', 0.62),
+    ...GEAR_COLORS,
     o: '#2a1f26', // 테두리, 입
     q: '#ff9db1', // 볼터치
     p: '#f08fab', // 코, 귀 안쪽
@@ -130,6 +142,7 @@ class Grid {
     look!: Coat // 지금 그리는 털 무늬 (볼살, 꼬리 같은 모양에 영향)
     bodyO: [number, number] = [AX, GY - 10] // 몸 부위 무늬의 기준점
     headO: [number, number] = [AX, GY - 20] // 머리 부위 무늬의 기준점
+    tailAt: [number, number] | null = null // 꼬리 리본을 다는 자리
 
     at(part: Part): this {
         this.cur = part
@@ -306,19 +319,23 @@ const CLOSED = [
     '..hhhhhhhhhmm...'
 ]
 
+// 웃는 얼굴: 웃는 눈에 볼터치
+const HAPPY = CLOSED.map((row, i) => (i === 5 ? 'hqqhhhhhhqqhmmnn' : row))
+
 const HEAD_PARTS: Record<string, [string, Part]> = {
+    q: ['q', 'head'],
     a: ['b', 'ear'], i: ['p', 'ear'], h: ['b', 'head'], r: ['b', 'forehead'], m: ['b', 'muzzle'], n: ['p', 'head'],
     o: ['o', 'head'], y: ['y', 'head'], e: ['e', 'head'], w: ['w', 'head']
 }
 
 // 머리 도장을 (hx, hy)가 머리 가운데가 되게 찍는다
-function face(g: Grid, hx: number, hy: number, _d: Dim, closed: boolean): void {
+function face(g: Grid, hx: number, hy: number, _d: Dim, expr: 'open' | 'closed' | 'happy'): void {
     hx = Math.round(hx)
     hy = Math.round(hy)
     g.headO = [hx, hy]
     const look = g.look
     const ears = EARS[look.fold ? 'fold' : look.tufts ? 'tufts' : (look.ear ?? 0) > 0 ? 'big' : (look.ear ?? 0) < 0 ? 'small' : 'normal']
-    const rows = [...ears, ...(closed ? CLOSED : HEAD)]
+    const rows = [...ears, ...(expr === 'happy' ? HAPPY : expr === 'closed' ? CLOSED : HEAD)]
     const x0 = hx - 8, y0 = hy - 7 - (ears.length - 4)
     rows.forEach((row, dy) => [...row].forEach((ch, dx) => {
         const hit = HEAD_PARTS[ch]
@@ -335,15 +352,26 @@ interface Move {
     sway: number // 꼬리 흔들림
 }
 
-// 다리마다 걸음 위상을 다르게 해서 발이 번갈아 나가게 한다.
-function gait(frame: number, stride: number, lift: number, offs: number[]): [number, number][] {
-    return offs.map((o) => {
-        const p = (frame / 4 + o) % 1
-        return [Math.round(stride * Math.sin(2 * Math.PI * p)), Math.round(lift * Math.max(0, Math.cos(2 * Math.PI * p)))]
-    })
-}
+// 발 위치 [앞뒤, 들어올림] (가까운 앞다리, 먼 앞다리, 가까운 뒷다리, 먼 뒷다리). 12칸 몸 기준이라 단계 크기에 맞게 늘린다.
+type Feet = [number, number][]
+// 걷기: 대각선 두 다리(가까운 앞+먼 뒤 / 먼 앞+가까운 뒤)가 짝지어 번갈아 내딛는다. 보폭을 작게 해서 다리가 거의 곧게 선다.
+const WALK: Feet[] = [
+    [[1.5, 0], [-1.5, 0], [-1.5, 0], [1.5, 0]],
+    [[0, 0], [0, 1.5], [0, 1.5], [0, 0]],
+    [[-1.5, 0], [1.5, 0], [1.5, 0], [-1.5, 0]],
+    [[0, 1.5], [0, 0], [0, 0], [0, 1.5]]
+]
+// 달리기: 앞다리 둘, 뒷다리 둘이 함께 쭉 뻗었다가(0) 몸 아래로 모은다(2).
+const RUN: Feet[] = [
+    [[4, 1], [3, 0], [-4, 1], [-3, 0]],
+    [[1, 2], [0, 2], [-1, 2], [0, 2]],
+    [[-2, 0], [-3, 0], [2, 0], [3, 0]],
+    [[2, 1], [1, 1], [-2, 1], [-1, 1]]
+]
+const scaleFeet = (feet: Feet, k: number): Feet => feet.map(([dx, lift]) => [Math.round(dx * k), Math.round(lift * k)])
 
 function tailDraw(g: Grid, d: Dim, pts: [number, number][]): void {
+    g.tailAt = pts[Math.floor(pts.length * 0.45)]
     pts.forEach(([x, y], i) => g.ellipse(x, y, d.tw * (g.look.thin ? 0.6 : 1) + (g.look.fluffy ? 0.7 : 0), d.tw * (g.look.thin ? 0.6 : 1) + (g.look.fluffy ? 0.7 : 0), 'b', i >= pts.length - 3 ? 'tailtip' : 'tail'))
 }
 
@@ -383,11 +411,12 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(front, m.feet[0], true)
     leg(back, m.feet[2], true)
 
-    face(g, bx + d.rx - 2, by - d.ry * 0.6 - 2 + m.headDy, d, false)
+    face(g, bx + d.rx - 2, by - d.ry * 0.6 - 2 + m.headDy, d, 'open')
 }
 
 // ---- 앉은 포즈 ----
-function sit(g: Grid, d: Dim, tailLift: number, lick: number): void {
+// lick: 0 = 그냥 앉기, 1/2 = 앞발을 들어 얼굴을 닦는다(발 높이가 달라 문지르는 것처럼 보인다). happy: 웃는 얼굴.
+function sit(g: Grid, d: Dim, o: { tail: number; lick?: number; happy?: boolean }): void {
     const s = d.rx / 12 // 12칸짜리 몸을 기준으로 잡은 좌표를 단계 크기에 맞게 늘린다
     const X = (dx: number): number => AX + dx * s
     const Y = (dy: number): number => GY - dy * s
@@ -396,7 +425,7 @@ function sit(g: Grid, d: Dim, tailLift: number, lick: number): void {
     const L = Math.max(5, Math.round(d.tail * 0.7))
     const pts: [number, number][] = []
     for (let i = 0; i < L; i++) {
-        const curl = i >= L - 5 ? Math.round((i - (L - 6)) * (1 + tailLift * 0.7)) : 0
+        const curl = i >= L - 5 ? Math.round((i - (L - 6)) * (1 + o.tail * 0.7)) : 0
         pts.push([X(-8) - i, GY - d.tw - curl])
     }
     tailDraw(g, d, pts)
@@ -404,19 +433,27 @@ function sit(g: Grid, d: Dim, tailLift: number, lick: number): void {
     g.ellipse(X(-3), Y(5), 7.5 * s, 5.5 * s, 'b') // 엉덩이
     g.ellipse(X(2), Y(8), 4.5 * s + 0.5, 8 * s, 'b') // 몸통
     g.retag(X(-11), Y(3.5), X(8), GY, 'body', 'under')
-    // 앞다리 두 개 (가운데에 그늘 선)
-    const lx0 = Math.round(X(1.5)), lx1 = Math.round(X(5.5))
-    g.rect(lx0, Y(6), lx1, GY, 'b', 'leg')
-    g.rect(Math.round(X(3.5)), Y(4), Math.round(X(3.5)), GY, 'b', 'farleg')
-    g.rect(lx0, GY - 1, lx1, GY, 'b', 'paw')
-    g.ellipse(X(4.5), Y(9), 2 * s + 0.5, 4 * s, 'b', 'chest') // 가슴
-    const hx = X(4.5), hy = Y(15.5) + lick
-    if (lick) {
-        // 앞발을 입 쪽으로 올려 핥는다
-        g.line(X(5), Y(8), hx + d.head * 0.55, hy + d.head * 0.8, d.lw, 'leg')
-        g.rect(hx + d.head * 0.55 - 1, hy + d.head * 0.8 - 1, hx + d.head * 0.55 + 1, hy + d.head * 0.8, 'b', 'paw')
+    const lx0 = Math.round(X(1.5)), lx1 = Math.round(X(5.5)), mid = Math.round(X(3.5))
+    if (o.lick) {
+        // 바닥에는 앞발 하나만
+        g.rect(lx0, Y(6), mid, GY, 'b', 'leg')
+        g.rect(lx0, GY - 1, mid, GY, 'b', 'paw')
+    } else {
+        // 앞다리 두 개 (가운데에 그늘 선)
+        g.rect(lx0, Y(6), lx1, GY, 'b', 'leg')
+        g.rect(mid, Y(4), mid, GY, 'b', 'farleg')
+        g.rect(lx0, GY - 1, lx1, GY, 'b', 'paw')
     }
-    face(g, hx, hy, d, lick > 0)
+    g.ellipse(X(4.5), Y(9), 2 * s + 0.5, 4 * s, 'b', 'chest') // 가슴
+    const hx = Math.round(X(4.5)), hy = Math.round(Y(15.5)) + (o.lick ? 1 : 0)
+    face(g, hx, hy, d, o.lick ? 'closed' : o.happy ? 'happy' : 'open')
+    if (o.lick) {
+        // 들어 올린 앞발: 가슴에서 주둥이 앞까지 올라간다
+        const px = hx + 3, py = hy + 2 + o.lick
+        g.rect(px, py, px + d.lw - 1, Math.round(Y(7)), 'b', 'leg')
+        g.rect(px - 1, py, px + d.lw - 1, py + 1, 'b', 'paw')
+        g.put(px, py, 'p', 'paw') // 분홍 발바닥이 보이게
+    }
 }
 
 // ---- 자는 포즈 (식빵 자세) ----
@@ -429,12 +466,43 @@ function sleep(g: Grid, d: Dim, breath: number): void {
     const hx = Math.round(AX + rx - 3), hy = GY - d.head * 0.92
     g.rect(AX - rx + 4, GY - 1, hx - 3, GY, 'b', 'tail') // 몸을 감싼 꼬리
     g.rect(hx - 6, GY - 1, hx - 3, GY, 'b', 'tailtip')
-    face(g, hx, hy, d, true)
+    g.tailAt = [Math.round(AX - rx * 0.2), GY - 1]
+    face(g, hx, hy, d, 'closed')
     g.rect(hx - 5, GY - 1, hx - 3, GY, 'b', 'paw').rect(hx + 3, GY - 1, hx + 5, GY, 'b', 'paw') // 모아 쥔 앞발
 }
 
+// ---- 소품 ----
+// 도장의 '.'은 투명. 위치는 머리 가운데(headO) 또는 꼬리 자리(tailAt) 기준 [x, y] 어긋남.
+// 머리 도장의 맨 윗줄(정수리)은 머리 가운데보다 3칸 위, 턱 끝은 6칸 아래다.
+const GEAR_ART: Record<string, { at: 'head' | 'neck' | 'tail'; off: [number, number]; rows: string[] }> = {
+    bell: {at: 'neck', off: [-6, 6], rows: ['CCCCCCCC', '....GG..', '....gg..']},
+    bandana: {at: 'neck', off: [-6, 6], rows: ['KKKKKKKK', '.KWKKWK.', '..KKKK..', '...KK...']},
+    bowtie: {at: 'neck', off: [-4, 6], rows: ['CC..CC', 'CCccCC', 'CC..CC']},
+    ribbonPink: {at: 'tail', off: [-2, -1], rows: ['P...P', 'PPWPP', 'P...P']},
+    ribbonMint: {at: 'tail', off: [-2, -1], rows: ['M...M', 'MMWMM', 'M...M']},
+    ribbonYellow: {at: 'tail', off: [-2, -1], rows: ['Y...Y', 'YYWYY', 'Y...Y']},
+    straw: {at: 'head', off: [-7, -7], rows: ['....TTTTTT....', '....TTTTTT....', '....CCCCCC....', 'TTTTTTTTTTTTTT', '.tttttttttttt.']},
+    crown: {at: 'head', off: [-4, -7], rows: ['G..G..G', 'GGGGGGG', 'GCGGGCG', 'ggggggg']},
+    party: {at: 'head', off: [-2, -11], rows: ['..W..', '..P..', '..P..', '.PYP.', '.YPY.', 'PYPYP', 'YPYPY', 'PYPYP']},
+    beret: {at: 'head', off: [-6, -6], rows: ['......v.....', '...VVVVVV...', '.VVVVVVVVVV.', 'vvvvvvvvvvvv']},
+    flower: {at: 'head', off: [-4, -5], rows: ['.P.', 'PYP', '.P.']}
+}
+
+function wear(g: Grid, gear: Gear, pose: Pose): void {
+    for (const id of [gear.tail, gear.neck, gear.head]) {
+        const art = id && GEAR_ART[id]
+        if (!art || (art.at === 'neck' && pose === 'sleep')) continue // 자는 동안 목은 몸에 묻혀 안 보인다
+        const base = art.at === 'tail' ? g.tailAt : g.headO
+        if (!base) continue
+        const x0 = Math.round(base[0]) + art.off[0], y0 = Math.round(base[1]) + art.off[1]
+        art.rows.forEach((row, dy) => [...row].forEach((ch, dx) => {
+            if (ch !== '.') g.put(x0 + dx, y0 + dy, ch, 'head')
+        }))
+    }
+}
+
 // ---- 조립 ----
-function build(stage: StageId, coat: CoatId, pose: Pose, frame: number): string[] {
+function build(stage: StageId, coat: CoatId, pose: Pose, frame: number, gear: Gear): string[] {
     const g = new Grid()
     g.look = COATS[coat]
     const base = DIMS[stage]
@@ -443,35 +511,39 @@ function build(stage: StageId, coat: CoatId, pose: Pose, frame: number): string[
     const s = (n: number): number => Math.max(1, Math.round(n * k))
     switch (pose) {
         case 'sit':
-            sit(g, d, frame, 0)
+            sit(g, d, {tail: frame})
+            break
+        case 'happy':
+            sit(g, d, {tail: frame * 2, happy: true})
             break
         case 'groom':
-            sit(g, d, 0, frame ? 2 : 0)
+            sit(g, d, {tail: 0, lick: frame + 1})
             break
         case 'sleep':
             sleep(g, d, frame)
             break
         case 'walk':
-            stand(g, d, {feet: gait(frame, s(3), s(2), [0, 0.5, 0.5, 0]), bob: frame % 2 ? 0 : 1, headDy: 0, tail: 'up', sway: [0, 1, 0, -1][frame]})
+            stand(g, d, {feet: scaleFeet(WALK[frame], k), bob: frame % 2, headDy: frame % 2, tail: 'up', sway: [0, 1, 0, -1][frame]})
             break
         case 'run':
-            stand(g, d, {feet: gait(frame, s(7), s(4), [0, 0.1, 0.5, 0.6]), bob: [1, 0, -1, 0][frame] * s(2), headDy: 1, tail: 'back', sway: [0, 1, 0, -1][frame]})
+            stand(g, d, {feet: scaleFeet(RUN[frame], k), bob: [0, -1, 0, -1][frame], headDy: 1, tail: 'back', sway: [0, 1, 0, -1][frame]})
             break
         case 'leap':
             stand(g, d, {feet: [[s(6), s(3)], [s(4), s(2)], [-s(6), s(3)], [-s(4), s(2)]], bob: -1, headDy: -1, tail: 'back', sway: 1})
             break
     }
+    wear(g, gear, pose)
     return g.finish(COATS[coat], d)
 }
 
 const cache = new Map<string, string[]>()
 
 // 그림 한 장: GRID_H줄 x GRID_W글자. '.'은 투명, 나머지는 paletteOf의 글자.
-export function frameOf(stage: StageId, coat: CoatId, pose: Pose, frame: number): string[] {
-    const key = `${stage}|${coat}|${pose}|${frame % FRAMES[pose]}`
+export function frameOf(stage: StageId, coat: CoatId, pose: Pose, frame: number, gear: Gear = {}): string[] {
+    const key = `${stage}|${coat}|${pose}|${frame % FRAMES[pose]}|${gear.neck ?? ''}|${gear.tail ?? ''}|${gear.head ?? ''}`
     let rows = cache.get(key)
     if (!rows) {
-        rows = build(stage, coat, pose, frame % FRAMES[pose])
+        rows = build(stage, coat, pose, frame % FRAMES[pose], gear)
         cache.set(key, rows)
     }
     return rows

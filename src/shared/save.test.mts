@@ -4,7 +4,8 @@ import {DEFAULT_SETTINGS, EMPTY_SAVE, mergeSettings, parseSave} from './save.ts'
 
 const ok = {cat: {level: 4, xp: 12.5, coat: 'gray'}, processed: ['a'], settings: {claude: false}, logOffsets: {'x.jsonl': 10}}
 const s = parseSave(JSON.stringify(ok))
-assert.deepEqual(s.cat, {level: 4, xp: 12.5, coat: 'gray'})
+assert.deepEqual(s.cat, {level: 4, xp: 12.5, coat: 'gray', gear: {}})
+assert.deepEqual(s.collection, [])
 assert.deepEqual(s.processed, ['a'])
 assert.deepEqual(s.settings, {claude: false, codex: true, updateCheck: true}) // 빠진 항목은 기본값
 assert.deepEqual(s.logOffsets, {'x.jsonl': 10})
@@ -15,10 +16,18 @@ for (const bad of ['', 'not json', '{}', '{"cat":{"level":0,"xp":0}}', '{"cat":{
 }
 // 알 수 없는 털 무늬는 기본값, xp가 기준을 넘으면 레벨업으로 정리
 const fixed = parseSave(JSON.stringify({cat: {level: 1, xp: 120, coat: 'rainbow'}}))
-assert.deepEqual(fixed.cat, {level: 2, xp: 20, coat: 'orange'})
+assert.deepEqual(fixed.cat, {level: 2, xp: 20, coat: 'orange', gear: {}})
 assert.equal(fixed.logOffsets, null)
 // 이상한 읽은 위치는 걸러낸다
 assert.deepEqual(parseSave(JSON.stringify({cat: {level: 1, xp: 0}, logOffsets: {a: -1, b: 'x', c: 5}})).logOffsets, {c: 5})
+
+// 소품과 도감: 모르는 id와 이상한 항목은 버린다
+const g = parseSave(JSON.stringify({
+    cat: {level: 9, xp: 0, coat: 'gray', gear: {neck: 'bell', tail: 'nope', head: 'crown', hack: 'x'}},
+    collection: [{coat: 'bengal', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}, {coat: 'dragon', completedAt: 'x'}, null, {coat: 'black'}]
+}))
+assert.deepEqual(g.cat.gear, {neck: 'bell', head: 'crown'})
+assert.deepEqual(g.collection, [{coat: 'bengal', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}])
 
 // 설정: 형식이 틀린 값은 무시
 assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, {claude: 'no', codex: false, hack: 1}), {claude: true, codex: false, updateCheck: true})
