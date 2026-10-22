@@ -36,10 +36,10 @@ const DIMS: Record<StageId, Dim> = {
 // ---- 털 무늬 ----
 // 색 이름: b 기본, s 그늘(배/먼 쪽 다리), d 무늬(줄무늬, 포인트, 검은 얼룩), l 밝은색(흰 부분), a 얼룩 보조색
 // 실제 고양이의 털 무늬 규칙대로 그린다: 태비는 등/꼬리/다리/이마에 줄, 턱시도는 가슴·배·주둥이·발이 흰색,
-// 젖소/삼색이는 흰 바탕에 얼룩, 샴은 귀·얼굴·다리·꼬리가 짙은 포인트, 아비시니안은 잔털 점(틱), 벵갈은 표범 무늬.
+// 젖소/삼색이는 흰 바탕에 얼룩, 샴은 귀·얼굴·다리·꼬리가 짙은 포인트, 아비시니안은 잔털 점(틱).
 type Key = 'b' | 's' | 'd' | 'l' | 'a'
 type Part = 'body' | 'under' | 'chest' | 'tail' | 'tailtip' | 'leg' | 'farleg' | 'paw' | 'head' | 'ear' | 'muzzle' | 'forehead'
-type Pattern = 'solid' | 'tabby' | 'cow' | 'calico' | 'ragdoll' | 'ticked' | 'spots'
+type Pattern = 'solid' | 'tabby' | 'cow' | 'calico' | 'ragdoll' | 'ticked'
 
 interface Coat {
     colors: Record<Key, string>
@@ -54,6 +54,7 @@ interface Coat {
     tufts?: boolean // 귀 끝 털 (메인쿤)
     big?: boolean // 몸집이 크다 (메인쿤)
     thin?: boolean // 꼬리가 가늘다 (털 없는 스핑크스)
+    short?: boolean // 다리가 짧다 (먼치킨)
 }
 
 const TABBY_MAP: Coat['map'] = {under: 'l', chest: 'l', muzzle: 'l'}
@@ -80,7 +81,7 @@ const COATS: Record<CoatId, Coat> = {
     persian: {colors: {b: '#f4e6c8', s: '#dcc9a4', d: '#f4e6c8', l: '#fff6e2', a: '#f4e6c8'}, eye: COPPER, pattern: 'solid', map: {under: 'l', muzzle: 'l'}, cheek: 0.6, fluffy: true, flat: true, ear: -2},
     siamese: {colors: {b: '#f1e3c8', s: '#d9c4a3', d: '#6b4a3a', l: '#fff1d6', a: '#f1e3c8'}, eye: BLUE, pattern: 'solid', map: {under: 'l', ear: 'd', muzzle: 'd', tail: 'd', tailtip: 'd', leg: 'd', farleg: 'd', paw: 'd'}},
     ragdoll: {colors: {b: '#f0e8dc', s: '#d8cdbd', d: '#7f8aa0', l: '#fffaf2', a: '#f0e8dc'}, eye: BLUE, pattern: 'ragdoll', map: {under: 'l', chest: 'l', tail: 'd', tailtip: 'd', leg: 'd', farleg: 'd', paw: 'l', head: 'l', muzzle: 'l', forehead: 'l', ear: 'd'}, cheek: 0.45, fluffy: true},
-    bengal: {colors: {b: '#d7a25c', s: '#bb8444', d: '#6b3a17', l: '#f6e7cb', a: '#d7a25c'}, eye: GREEN, pattern: 'spots', map: {under: 'l', chest: 'l', muzzle: 'l'}},
+    munchkin: {colors: {b: '#e3b98a', s: '#c99d6c', d: '#e3b98a', l: '#fff8ee', a: '#e3b98a'}, eye: GREEN, pattern: 'solid', map: TUX_MAP, short: true}, // 크림색에 흰 가슴·양말
     maincoon: {colors: {b: '#a8794a', s: '#8c5f36', d: '#4f3119', l: '#e8d3ae', a: '#a8794a'}, eye: AMBER, pattern: 'tabby', map: TABBY_MAP, cheek: 0.4, fluffy: true, tufts: true, big: true},
     sphynx: {colors: {b: '#e8b8a6', s: '#cf9987', d: '#c18a79', l: '#f4d3c5', a: '#e8b8a6'}, eye: AMBER, pattern: 'solid', map: {under: 'l', forehead: 'd'}, ear: 2, thin: true}
 }
@@ -217,8 +218,6 @@ class Grid {
                     if (stripe) key = 'd'
                 } else if (c.pattern === 'ticked' && key === 'b') {
                     if (hash(x, y, 5) > 0.8) key = 'd' // 털 한 올마다 색이 다른 잔무늬(틱)
-                } else if (c.pattern === 'spots' && key === 'b' && part !== 'ear') {
-                    if (noise(px / 3.3 + 1, py / 3.3, 21) > 0.64) key = 'd' // 표범 무늬
                 } else if (c.pattern === 'ragdoll' && part !== 'ear' && HEAD.includes(part) && key === 'l') {
                     // 얼굴 위쪽은 짙은 마스크, 가운데 이마는 흰 줄, 아래쪽(볼, 턱)은 흰색
                     if (py < d.head * 0.3) key = Math.abs(px) <= 1 && py > -d.head * 0.6 ? 'l' : 'd'
@@ -506,7 +505,8 @@ function build(stage: StageId, coat: CoatId, pose: Pose, frame: number, gear: Ge
     const g = new Grid()
     g.look = COATS[coat]
     const base = DIMS[stage]
-    const d: Dim = g.look.big ? {...base, rx: base.rx + 1.5, ry: base.ry + 0.5, tail: base.tail + 1, tw: base.tw + 0.3} : base // 메인쿤은 덩치가 크다
+    let d: Dim = g.look.big ? {...base, rx: base.rx + 1.5, ry: base.ry + 0.5, tail: base.tail + 1, tw: base.tw + 0.3} : base // 메인쿤은 덩치가 크다
+    if (g.look.short) d = {...d, leg: Math.max(2, Math.round(d.leg * 0.45))} // 먼치킨은 다리가 짧다
     const k = d.rx / 12
     const s = (n: number): number => Math.max(1, Math.round(n * k))
     switch (pose) {

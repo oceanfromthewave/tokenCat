@@ -24,10 +24,15 @@ assert.deepEqual(parseSave(JSON.stringify({cat: {level: 1, xp: 0}, logOffsets: {
 // 소품과 도감: 모르는 id와 이상한 항목은 버린다
 const g = parseSave(JSON.stringify({
     cat: {level: 9, xp: 0, coat: 'gray', gear: {neck: 'bell', tail: 'nope', head: 'crown', hack: 'x'}},
-    collection: [{coat: 'bengal', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}, {coat: 'dragon', completedAt: 'x'}, null, {coat: 'black'}]
+    collection: [{coat: 'munchkin', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}, {coat: 'dragon', completedAt: 'x'}, null, {coat: 'black'}]
 }))
 assert.deepEqual(g.cat.gear, {neck: 'bell', head: 'crown'})
-assert.deepEqual(g.collection, [{coat: 'bengal', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}])
+assert.deepEqual(g.collection, [{coat: 'munchkin', gear: {head: 'party'}, completedAt: '2026-10-22T00:00:00Z'}])
+
+// 없어진 벵갈은 먼치킨으로 옮긴다 (지금 고양이와 도감 모두)
+const old = parseSave(JSON.stringify({cat: {level: 2, xp: 0, coat: 'bengal'}, collection: [{coat: 'bengal', completedAt: '2026-10-21T00:00:00Z'}]}))
+assert.equal(old.cat.coat, 'munchkin')
+assert.deepEqual(old.collection.map((c) => c.coat), ['munchkin'])
 
 // 설정: 형식이 틀린 값은 무시
 assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, {claude: 'no', codex: false, hack: 1}), {claude: true, codex: false, updateCheck: true})

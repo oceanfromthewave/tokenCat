@@ -44,9 +44,9 @@ assert.deepEqual(lv9.gear, {neck: GEAR.neck[0].id, tail: GEAR.tail[GEAR.tail.len
 assert.ok(GEAR_LEVEL.head < HARVEST_LEVEL)
 
 // 다 크면 도감에 올라가고(무늬, 소품, 시각) 새 고양이가 시작된다
-const grown = {...lv9, level: HARVEST_LEVEL, coat: 'bengal' as const}
+const grown = {...lv9, level: HARVEST_LEVEL, coat: 'munchkin' as const}
 const h = harvestIfReady(grown, [], '2026-10-22T00:00:00Z', () => 0)
-assert.deepEqual(h.collection, [{coat: 'bengal', gear: lv9.gear, completedAt: '2026-10-22T00:00:00Z'}])
+assert.deepEqual(h.collection, [{coat: 'munchkin', gear: lv9.gear, completedAt: '2026-10-22T00:00:00Z'}])
 assert.deepEqual(h.cat, {level: 1, xp: 0, coat: COATS[0].id, gear: {}})
 const not = harvestIfReady({...grown, level: HARVEST_LEVEL - 1}, [], 'x')
 assert.equal(not.collection.length, 0)

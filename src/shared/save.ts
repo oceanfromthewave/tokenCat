@@ -42,6 +42,10 @@ function parseGear(v: unknown): Gear {
     return gear as Gear
 }
 
+// 없어진 품종은 새 품종으로 옮긴다 (예전 저장 파일의 벵갈 -> 먼치킨). 도감 기록이 사라지지 않게.
+const RENAMED: Record<string, string> = {bengal: 'munchkin'}
+const renamed = (v: unknown): unknown => (typeof v === 'string' && Object.hasOwn(RENAMED, v) ? RENAMED[v] : v)
+
 // 저장 파일 내용을 SaveData로 바꾼다. 형식이 이상하면 새로 시작(EMPTY_SAVE)한다.
 export function parseSave(text: string): SaveData {
     try {
@@ -50,7 +54,8 @@ export function parseSave(text: string): SaveData {
         // 상한은 addXp 반복 횟수가 터무니없이 커지는 것을 막기 위한 안전장치
         if (!Number.isInteger(level) || level < 1 || level > 9999) return EMPTY_SAVE
         if (!isNum(xp) || xp < 0 || xp > 1e9) return EMPTY_SAVE
-        const coat = isCoatId(raw.cat.coat) ? raw.cat.coat : INITIAL_CAT.coat
+        const catCoat = renamed(raw.cat.coat)
+        const coat = isCoatId(catCoat) ? catCoat : INITIAL_CAT.coat
 
         const processed: string[] = Array.isArray(raw.processed)
             ? raw.processed.filter((k: unknown): k is string => typeof k === 'string' && k.length <= 300).slice(0, 1_000_000)
@@ -64,6 +69,7 @@ export function parseSave(text: string): SaveData {
         }
         const collection: Completed[] = Array.isArray(raw.collection)
             ? raw.collection
+                .map((c: unknown) => (c && typeof c === 'object' ? {...c, coat: renamed((c as Completed).coat)} : c))
                 .filter((c: unknown): c is Completed => !!c && typeof c === 'object' && isCoatId((c as Completed).coat) &&
                     typeof (c as Completed).completedAt === 'string' && (c as Completed).completedAt.length <= 40)
                 .slice(0, 10_000)

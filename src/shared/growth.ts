@@ -33,7 +33,7 @@ export const COATS = [
     {id: 'persian', name: '페르시안', weight: 4},
     {id: 'siamese', name: '샴', weight: 2},
     {id: 'ragdoll', name: '랙돌', weight: 2},
-    {id: 'bengal', name: '벵갈', weight: 2},
+    {id: 'munchkin', name: '먼치킨', weight: 2},
     {id: 'maincoon', name: '메인쿤', weight: 2},
     {id: 'sphynx', name: '스핑크스', weight: 2}
 ] as const
