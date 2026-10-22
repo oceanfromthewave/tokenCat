@@ -18,5 +18,7 @@ AI 사용 기록(토큰 숫자)을 경험치로 바꿔 작업표시줄 위를 �
 - Claude Code 로그는 한 응답이 여러 줄로 중복된다. 기록 ID는 `message.id|requestId`, `cache_read_input_tokens` 제외. 첫 확인은 과거를 보상하지 않고 읽은 위치만 저장(도구별 기준선).
 - 렌더러 Node 통합 금지, contextIsolation 유지, preload `api` 객체로만 노출. 외부 통신 없음(MVP).
 - 설치된 앱에서는 테스트 경험치를 막는다(`app.isPackaged`).
+- 외부 통신은 업데이트 하나뿐: 새 버전 확인(`api.github.com/repos/oceanfromthewave/tokenCat/releases/latest`)과, 사용자가 [업데이트]를 눌렀을 때만 `electron-updater`(릴리스의 `latest.yml` 체크섬 검증)로 내려받아 "다시 시작하고 설치". 자동 설치는 하지 않는다(서명 없는 설치 파일). 개발 실행이나 실패 시에는 이 저장소의 릴리스 주소만 브라우저로 연다. 우클릭 메뉴에서 자동 확인을 끌 수 있다.
+- 릴리스: `package.json` 버전 올림 -> typecheck/test -> `npm run build:win` -> `gh release create vX dist/TokenCat-Setup-X.exe dist/TokenCat-Setup-X.exe.blockmap dist/latest.yml --target main`. 세 파일을 모두 올려야 앱 안 업데이트가 새 버전을 찾는다.
 - 개발 실행과 설치 앱은 같은 `%APPDATA%\tokencat\save.json`을 공유한다.
 - `record.md`는 로컬 전용, git에 올리지 않는다.

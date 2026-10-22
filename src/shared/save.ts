@@ -4,16 +4,18 @@ import {INITIAL_CAT, addXp, isCoatId, type CatState} from './growth.ts'
 export interface Settings {
     claude: boolean // Claude Code 로그 수집
     codex: boolean // Codex 로그 수집
+    updateCheck: boolean // 새 버전이 있는지 GitHub에 물어보기
 }
 
-export const DEFAULT_SETTINGS: Settings = {claude: true, codex: true}
+export const DEFAULT_SETTINGS: Settings = {claude: true, codex: true, updateCheck: true}
 
 export function mergeSettings(current: Settings, patch: unknown): Settings {
     const p = (typeof patch === 'object' && patch !== null ? patch : {}) as Record<string, unknown>
     const own = (k: string): unknown => (Object.hasOwn(p, k) ? p[k] : undefined)
     return {
         claude: typeof own('claude') === 'boolean' ? (own('claude') as boolean) : current.claude,
-        codex: typeof own('codex') === 'boolean' ? (own('codex') as boolean) : current.codex
+        codex: typeof own('codex') === 'boolean' ? (own('codex') as boolean) : current.codex,
+        updateCheck: typeof own('updateCheck') === 'boolean' ? (own('updateCheck') as boolean) : current.updateCheck
     }
 }
 

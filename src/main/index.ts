@@ -1,8 +1,10 @@
-import {app, BrowserWindow, ipcMain, Menu, screen, Tray} from 'electron'
+import {app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, shell, Tray} from 'electron'
+import {autoUpdater} from 'electron-updater'
 import {join} from 'path'
 import {INITIAL_CAT, newCat, type CatState} from '../shared/growth'
 import {EMPTY_SAVE, DEFAULT_SETTINGS, mergeSettings, type Settings} from '../shared/save'
 import {TOKENS_PER_XP, applyUsage, type UsageRecord} from '../shared/usage'
+import {RELEASES_API, isNewer, parseLatestRelease} from '../shared/version'
 import {defaultClaudeRoot, defaultCodexRoot, scanClaudeLogs, scanCodexLogs, type Offsets} from './claudeLogs'
 import {loadSave, writeSave} from './store'
 import {trayIcon} from './trayIcon'
@@ -19,6 +21,7 @@ let logOffsets: Offsets | null = null
 let settings: Settings = DEFAULT_SETTINGS
 let win: BrowserWindow | null = null
 let tray: Tray | null = null
+let askedVersion: string | null = null // 이번 실행에서 이미 물어본 버전 (같은 버전을 반복해서 묻지 않는다)
 
 function persist(): void {
     writeSave({cat, processed, settings, logOffsets})
@@ -99,9 +102,96 @@ function pollLogs(): void {
     }
 }
 
+// 새 버전을 내려받아 설치한다. 설치된 앱(패키지)에서만 동작하고, 개발 실행이나 실패 시에는 다운로드 페이지를 연다.
+// 내려받기는 사용자가 [업데이트]를 눌렀을 때만 하고, 자동 설치도 하지 않는다. (무결성은 릴리스의 latest.yml 체크섬으로 확인)
+let updating = false
+async function downloadAndInstall(releaseUrl: string): Promise<void> {
+    if (!app.isPackaged) {
+        await shell.openExternal(releaseUrl)
+        return
+    }
+    if (updating) return
+    updating = true
+    autoUpdater.autoDownload = false
+    autoUpdater.autoInstallOnAppQuit = false
+    const onProgress = (p: { percent: number }): void => tray?.setToolTip(`Token Cat ${Math.floor(p.percent)}%`)
+    autoUpdater.on('download-progress', onProgress)
+    try {
+        new Notification({title: 'Token Cat', body: '새 버전을 내려받는 중이에요'}).show()
+        const found = await autoUpdater.checkForUpdates()
+        if (!found?.isUpdateAvailable) throw new Error('업데이트 정보를 찾지 못함')
+        await autoUpdater.downloadUpdate()
+        const {response} = await dialog.showMessageBox({
+            type: 'info',
+            title: 'Token Cat',
+            message: '다운로드를 마쳤어요',
+            detail: `지금 다시 시작하면 v${found.updateInfo.version} 설치가 끝나요. 저장된 고양이는 그대로예요.`,
+            buttons: ['다시 시작하고 설치', '나중에'],
+            defaultId: 0,
+            cancelId: 1
+        })
+        if (response === 0) {
+            persist()
+            autoUpdater.quitAndInstall(true, true) // 조용히 설치하고 끝나면 다시 실행
+        }
+    } catch (err) {
+        console.error('업데이트 설치 실패:', err instanceof Error ? err.message : err)
+        const {response} = await dialog.showMessageBox({
+            type: 'warning',
+            title: 'Token Cat',
+            message: '업데이트를 설치하지 못했어요',
+            detail: '다운로드 페이지에서 설치 파일을 직접 받을 수 있어요.',
+            buttons: ['다운로드 페이지 열기', '닫기'],
+            defaultId: 0,
+            cancelId: 1
+        })
+        if (response === 0) await shell.openExternal(releaseUrl)
+    } finally {
+        autoUpdater.off('download-progress', onProgress)
+        tray?.setToolTip('Token Cat')
+        updating = false
+    }
+}
+
+// 새 버전 확인. GitHub의 '최신 릴리스' 정보만 받아오고(사용 기록 등은 보내지 않는다), 새 버전이면 물어본다.
+async function checkForUpdate(manual: boolean): Promise<void> {
+    if (!manual && !settings.updateCheck) return
+    const current = app.getVersion()
+    try {
+        const res = await net.fetch(RELEASES_API, {
+            headers: {'User-Agent': 'TokenCat', Accept: 'application/vnd.github+json'},
+            signal: AbortSignal.timeout(8000)
+        })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const latest = parseLatestRelease(await res.json())
+        if (!latest) throw new Error('응답 형식이 올바르지 않음')
+
+        if (!isNewer(latest.version, current)) {
+            if (manual) await dialog.showMessageBox({type: 'info', title: 'Token Cat', message: '최신 버전을 쓰고 있어요', detail: `현재 v${current}`})
+            return
+        }
+        if (!manual && latest.version === askedVersion) return // 자동 확인은 이미 물어본 버전을 다시 묻지 않는다
+        askedVersion = latest.version
+
+        const {response} = await dialog.showMessageBox({
+            type: 'info',
+            title: '새 버전이 있어요',
+            message: `새 버전 v${latest.version}이 나왔어요. 업데이트 하시겠어요?`,
+            detail: `현재 v${current}\n\n업데이트를 누르면 새 버전을 내려받아요. 설치 후 다시 시작해도 저장된 고양이는 그대로 유지돼요.`,
+            buttons: ['업데이트', '나중에'],
+            defaultId: 0,
+            cancelId: 1
+        })
+        if (response === 0) await downloadAndInstall(latest.url) // parseLatestRelease가 우리 저장소의 릴리스 주소만 통과시킨다
+    } catch (err) {
+        console.error('업데이트 확인 실패:', err instanceof Error ? err.message : err)
+        if (manual) await dialog.showMessageBox({type: 'warning', title: 'Token Cat', message: '업데이트를 확인하지 못했어요', detail: '인터넷 연결을 확인하고 잠시 뒤에 다시 시도해 주세요.'})
+    }
+}
+
 function showMenu(): void {
     if (!win) return
-    const toggle = (key: 'claude' | 'codex') => (item: Electron.MenuItem): void => {
+    const toggle = (key: 'claude' | 'codex' | 'updateCheck') => (item: Electron.MenuItem): void => {
         settings = mergeSettings(settings, {[key]: item.checked})
         persist()
     }
@@ -109,6 +199,8 @@ function showMenu(): void {
         {label: 'Claude Code 기록 읽기', type: 'checkbox', checked: settings.claude, click: toggle('claude')},
         {label: 'Codex 기록 읽기', type: 'checkbox', checked: settings.codex, click: toggle('codex')},
         {type: 'separator'},
+        {label: '업데이트 확인', click: () => void checkForUpdate(true)},
+        {label: '새 버전 자동 확인', type: 'checkbox', checked: settings.updateCheck, click: toggle('updateCheck')},
         {
             label: 'Windows 시작 시 자동 실행',
             type: 'checkbox',
@@ -145,6 +237,7 @@ function createTray(): void {
     tray.on('click', toggle)
     tray.on('right-click', () => tray?.popUpContextMenu(Menu.buildFromTemplate([
         {label: win?.isVisible() ? '고양이 숨기기' : '고양이 보이기', click: toggle},
+        {label: '업데이트 확인', click: () => void checkForUpdate(true)},
         {type: 'separator'},
         {label: '종료', click: () => app.quit()}
     ])))
@@ -179,6 +272,9 @@ if (!app.requestSingleInstanceLock()) {
         setInterval(fitToTaskbar, 3000) // 작업표시줄을 옮기거나 자동 숨김을 바꾼 경우를 놓치지 않게
         pollLogs()
         setInterval(pollLogs, POLL_MS)
+        setTimeout(() => void checkForUpdate(false), 15_000) // 시작 직후에는 고양이가 자리 잡도록 잠깐 기다린다
+        setInterval(() => void checkForUpdate(false), 60 * 60 * 1000) // 켜 둔 채로도 한 시간 안에 새 버전을 알 수 있게
+        powerMonitor.on('resume', () => setTimeout(() => void checkForUpdate(false), 15_000)) // 절전에서 깨어나면 한 번 확인 (네트워크가 붙을 시간을 둔다)
     })
 }
 

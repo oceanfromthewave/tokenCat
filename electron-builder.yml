@@ -1,5 +1,6 @@
 appId: com.tokencat.app
 productName: Token Cat
+icon: build/icon.png
 directories:
   output: dist
 files:
@@ -14,3 +15,7 @@ nsis:
   allowToChangeInstallationDirectory: true
   runAfterFinish: false
   artifactName: TokenCat-Setup-${version}.${ext}
+publish:
+  provider: github # 자동 업데이트가 latest.yml을 찾는 곳 (릴리스 업로드는 직접 한다)
+  owner: oceanfromthewave
+  repo: tokenCat

@@ -6,7 +6,7 @@ const ok = {cat: {level: 4, xp: 12.5, coat: 'gray'}, processed: ['a'], settings:
 const s = parseSave(JSON.stringify(ok))
 assert.deepEqual(s.cat, {level: 4, xp: 12.5, coat: 'gray'})
 assert.deepEqual(s.processed, ['a'])
-assert.deepEqual(s.settings, {claude: false, codex: true}) // 빠진 항목은 기본값
+assert.deepEqual(s.settings, {claude: false, codex: true, updateCheck: true}) // 빠진 항목은 기본값
 assert.deepEqual(s.logOffsets, {'x.jsonl': 10})
 
 // 망가진 파일은 새로 시작
@@ -21,7 +21,7 @@ assert.equal(fixed.logOffsets, null)
 assert.deepEqual(parseSave(JSON.stringify({cat: {level: 1, xp: 0}, logOffsets: {a: -1, b: 'x', c: 5}})).logOffsets, {c: 5})
 
 // 설정: 형식이 틀린 값은 무시
-assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, {claude: 'no', codex: false, hack: 1}), {claude: true, codex: false})
+assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, {claude: 'no', codex: false, hack: 1}), {claude: true, codex: false, updateCheck: true})
 assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, null), DEFAULT_SETTINGS)
 
 console.log('save: all checks passed')

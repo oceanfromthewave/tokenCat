@@ -8,3 +8,7 @@ Claude Code / Codex 사용 기록(토큰 숫자만)을 경험치로 바꿔 키�
 - 프롬프트나 코드는 읽지 않는다. 토큰 숫자·ID·시각만 쓰고, 모든 데이터는 내 PC에만 저장한다.
 
 개발: `npm install` → `npm run dev`, 테스트 `npm test`, 설치 파일 `npm run build:win`.
+
+## 설치
+
+[Releases](https://github.com/oceanfromthewave/tokenCat/releases)에서 `TokenCat-Setup-<버전>.exe`를 받아 설치한다. 코드 서명이 없어서 Windows SmartScreen 경고가 뜰 수 있다("추가 정보" -> "실행"). 설치 후에는 새 버전이 나오면 앱이 물어보고, 눌렀을 때만 내려받는다.
