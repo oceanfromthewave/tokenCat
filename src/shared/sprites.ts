@@ -116,7 +116,7 @@ export const paletteOf = (coat: CoatId): Record<string, string> => ({
     o: '#2a1f26', // 테두리, 입
     q: '#ff9db1', // 볼터치
     p: '#f08fab', // 코, 귀 안쪽
-    y: COATS[coat].eye, // 눈 (홍채)
+    y: mix(COATS[coat].eye, '#2a1f26', 0.14), // 눈 (조금 차분한 홍채색)
     e: '#1b1b22', // 눈동자
     w: '#ffffff' // 눈빛
 })
@@ -253,76 +253,84 @@ class Grid {
     }
 }
 
-// ---- 머리 (손으로 찍은 도트, 3/4 옆모습으로 오른쪽을 봄) ----
+// ---- 머리 (손으로 찍은 도트, 정면 얼굴) ----
 // 얼굴은 귀여움이 결정되는 곳이라 계산으로 그리지 않고 한 칸씩 직접 찍었다. 모든 단계가 같은 머리를 쓴다.
 // (몸은 단계마다 커지므로 아기일수록 머리가 상대적으로 크다)
 // 글자: a 귀, i 귀 안쪽(분홍), h 머리털, r 이마 무늬 자리, m 주둥이, n 코, o 입,
 //       y 홍채, e 눈동자, w 눈빛, . 빈칸
+// 귀 맨 아래 줄은 머리 맨 윗줄(3~12칸)보다 넓지 않게 한다. 넓으면 귀 밑에 윤곽선 틈이 생겨 귀가 떠 보인다.
 const EARS: Record<'normal' | 'small' | 'big' | 'fold' | 'tufts', string[]> = {
     normal: [
-        '..a..........a..',
-        '.aaa........aaa.',
-        '.aiaa......aaia.',
-        'aaiiahhhhhhaiiaa'
+        '....a......a....',
+        '...aia....aia...',
+        '...aiia..aiia...',
+        '...aiiahhaiia...'
     ],
     small: [ // 페르시안: 작고 낮은 귀
         '................',
         '................',
-        '.aaa........aaa.',
-        'aaiahhhhhhhhaiaa'
+        '...aia....aia...',
+        '...aiahhhhaia...'
     ],
     big: [ // 스핑크스: 크고 넓은 귀
-        '..a..........a..',
-        '.aaa........aaa.',
-        '.aiaa......aaia.',
-        'aaiia......aiiaa',
-        'aaiiaa....aaiiaa',
-        'aaiiiahhhhaiiiaa'
+        '...a........a...',
+        '...aa......aa...',
+        '..aiaa....aaia..',
+        '..aiia....aiia..',
+        '..aiiaa..aaiia..',
+        '...aiiahhaiia...'
     ],
     fold: [ // 스코티시 폴드: 앞으로 접혀 머리에 붙은 귀
         '................',
         '................',
-        '..aaa......aaa..',
-        '.aaaahhhhhhaaaa.'
+        '...aaa....aaa...',
+        '...aaahhhhaaa...'
     ],
     tufts: [ // 메인쿤: 귀 끝 털
-        '..a..........a..',
-        '..a..........a..',
-        '.aaa........aaa.',
-        '.aiaa......aaia.',
-        'aaiiahhhhhhaiiaa'
+        '....a......a....',
+        '....a......a....',
+        '...aia....aia...',
+        '...aiia..aiia...',
+        '...aiiahhaiia...'
     ]
 }
 
-const HEAD = [
-    'hhhhhhrhhrhhhhhh',
-    'hhhhyyhrhhhyyhhh',
-    'hhhyweyhhhweyhhh',
-    'hhhyeeyhhheeyhhh',
-    'hhhyeeyhhheeymmm',
-    'hhhhyyhhhhyymmnn',
-    'hhhhhhhhhhmmmmom',
-    'hhhhhhhhhmmmoom.',
-    '.hhhhhhhhmmmmm..',
-    '..hhhhhhhhhmm...'
-]
+const FACE_EDGES: [number, number][] = [[3, 12], [2, 13], [2, 13], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [2, 13], [4, 11]]
 
-// 감은 눈: 웃는 모양(^)
-const CLOSED = [
-    'hhhhhhrhhrhhhhhh',
-    'hhhhhhhrhhhhhhhh',
-    'hhhhhhhhhhhhhhhh',
-    'hhhhoohhhhoohhhh',
-    'hhhohhohhhhhohmm',
-    'hhhhhhhhhhhhmmnn',
-    'hhhhhhhhhhmmmmom',
-    'hhhhhhhhhmmmoom.',
-    '.hhhhhhhhmmmmm..',
-    '..hhhhhhhhhmm...'
-]
+function faceArt(expr: 'open' | 'closed' | 'happy'): string[] {
+    const rows = FACE_EDGES.map(([left, right]) => Array.from({length: 16}, (_, x): string => x >= left && x <= right ? 'h' : '.'))
+    const mark = (y: number, x: number, art: string): void => [...art].forEach((ch, dx) => { rows[y][x + dx] = ch })
 
-// 웃는 얼굴: 웃는 눈에 볼터치
-const HAPPY = CLOSED.map((row, i) => (i === 5 ? 'hqqhhhhhhqqhmmnn' : row))
+    // 이마 줄무늬 자리 (줄무늬 털에서만 짙게 칠해진다)
+    mark(0, 6, 'r')
+    mark(0, 9, 'r')
+    mark(1, 6, 'r')
+    mark(1, 9, 'r')
+    mark(0, 7, 'rr')
+
+    // 큰 홍채에 검은 동공과 작은 반짝임을 넣어, 작은 화면에서도 눈이 먼저 보이게 한다.
+    if (expr === 'open') {
+        for (const x of [3, 9]) {
+            mark(3, x + 1, 'ywy')
+            mark(4, x, 'yeey')
+            mark(5, x, 'yeey')
+            mark(6, x + 1, 'yyy')
+        }
+    } else {
+        mark(4, 3, 'ooo')
+        mark(4, 10, 'ooo')
+    }
+    mark(7, 2, expr === 'happy' ? 'qqq' : 'qq')
+    mark(7, 11, expr === 'happy' ? 'qqq' : 'qq')
+    mark(7, 6, 'mmmm') // 코를 길게 빼지 않고 양 볼 사이에 작게 모은다.
+    mark(8, 6, 'mnnm')
+    mark(9, 7, 'oo')
+    return rows.map((row) => row.join(''))
+}
+
+const HEAD = faceArt('open')
+const CLOSED = faceArt('closed')
+const HAPPY = faceArt('happy')
 
 const HEAD_PARTS: Record<string, [string, Part]> = {
     q: ['q', 'head'],
@@ -506,12 +514,14 @@ function sleep(g: Grid, d: Dim, breath: number): void {
     g.bodyO = [AX, Math.round(by)]
     g.at('body').ellipse(AX, by, rx, ry, 'b')
     g.retag(AX - rx, by + ry * 0.4, AX + rx, GY, 'body', 'under')
-    const hx = Math.round(AX + rx - 3), hy = GY - d.head * 0.92
-    g.rect(AX - rx + 4, GY - 1, hx - 3, GY, 'b', 'tail') // 몸을 감싼 꼬리
-    g.rect(hx - 6, GY - 1, hx - 3, GY, 'b', 'tailtip')
-    g.tailAt = [Math.round(AX - rx * 0.2), GY - 1]
+    const hx = Math.round(AX + rx - 3), hy = GY - d.head * 1.2
+    const tail: [number, number][] = [
+        [AX - rx + 3, GY - 1], [AX - rx + 1, GY - 3], [AX - rx + 1, GY - 5],
+        [AX - rx + 3, GY - 7], [AX - rx + 5, GY - 7], [AX - rx + 7, GY - 6]
+    ]
+    tailDraw(g, d, tail) // 꼬리가 몸 앞에서 둥글게 말린다
     face(g, hx, hy, d, 'closed')
-    g.rect(hx - 5, GY - 1, hx - 3, GY, 'b', 'paw').rect(hx + 3, GY - 1, hx + 5, GY, 'b', 'paw') // 모아 쥔 앞발
+    g.rect(hx - 4, GY - 1, hx - 3, GY - 1, 'b', 'paw').rect(hx + 2, GY - 1, hx + 3, GY - 1, 'b', 'paw') // 모아 쥔 앞발
 }
 
 // ---- 소품 ----
