@@ -32,8 +32,8 @@ interface Dim {
 const DIMS: Record<StageId, Dim> = {
     baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 2, tail: 8, tw: 1.2},
     kitten: {rx: 10, ry: 5.2, head: 8, ear: 5, leg: 6, lw: 3, tail: 11, tw: 1.4},
-    young: {rx: 12, ry: 6, head: 8, ear: 5, leg: 7, lw: 4, tail: 13, tw: 1.6},
-    adult: {rx: 14, ry: 6.5, head: 8, ear: 5, leg: 8, lw: 4, tail: 15, tw: 1.7}
+    young: {rx: 11, ry: 6, head: 8, ear: 5, leg: 7, lw: 4, tail: 13, tw: 1.6},
+    adult: {rx: 12.5, ry: 6.5, head: 8, ear: 5, leg: 8, lw: 4, tail: 15, tw: 1.7}
 }
 
 // ---- 털 무늬 ----
@@ -295,7 +295,8 @@ const EARS: Record<'normal' | 'small' | 'big' | 'fold' | 'tufts', string[]> = {
     ]
 }
 
-const FACE_EDGES: [number, number][] = [[3, 12], [2, 13], [2, 13], [1, 14], [1, 14], [1, 14], [1, 14], [1, 14], [2, 13], [4, 11]]
+// 머리 윤곽: 위는 귀 밑동 폭, 아래쪽 볼살이 양옆으로 살짝 나온 둥근 얼굴
+const FACE_EDGES: [number, number][] = [[3, 12], [2, 13], [1, 14], [1, 14], [1, 14], [1, 14], [0, 15], [0, 15], [1, 14], [3, 12]]
 
 function faceArt(expr: 'open' | 'closed' | 'happy'): string[] {
     const rows = FACE_EDGES.map(([left, right]) => Array.from({length: 16}, (_, x): string => x >= left && x <= right ? 'h' : '.'))
@@ -309,21 +310,29 @@ function faceArt(expr: 'open' | 'closed' | 'happy'): string[] {
     mark(0, 7, 'rr')
 
     // 큰 홍채에 검은 동공과 작은 반짝임을 넣어, 작은 화면에서도 눈이 먼저 보이게 한다.
+    // 눈: 크고 동그란 눈동자에 큰 눈빛(왼쪽 위)과 작은 눈빛(오른쪽 아래)
     if (expr === 'open') {
-        for (const x of [3, 9]) {
-            mark(3, x + 1, 'ywy')
-            mark(4, x, 'yeey')
+        for (const x of [2, 10]) {
+            mark(3, x + 1, 'yy')
+            mark(4, x, 'ywey')
             mark(5, x, 'yeey')
-            mark(6, x + 1, 'yyy')
+            mark(6, x, 'yewy')
+            mark(7, x + 1, 'yy')
         }
     } else {
-        mark(4, 3, 'ooo')
-        mark(4, 10, 'ooo')
+        // 감은 눈: 웃는 곡선 ^ ^
+        mark(5, 3, 'o..')
+        mark(4, 3, '.oo')
+        mark(5, 5, 'o')
+        mark(5, 10, 'o')
+        mark(4, 11, 'oo')
+        mark(5, 12, '.o')
     }
-    mark(7, 2, expr === 'happy' ? 'qqq' : 'qq')
-    mark(7, 11, expr === 'happy' ? 'qqq' : 'qq')
-    mark(7, 6, 'mmmm') // 코를 길게 빼지 않고 양 볼 사이에 작게 모은다.
-    mark(8, 6, 'mnnm')
+    mark(7, 1, expr === 'happy' ? 'qqq' : 'qq') // 볼터치
+    mark(7, 12, expr === 'happy' ? 'qqq' : 'qq')
+    mark(6, 6, 'mmmm') // 주둥이는 양 볼 사이에 작게
+    mark(7, 6, 'mnnm')
+    mark(8, 6, 'ommo') // 웃는 입 (ᴗ)
     mark(9, 7, 'oo')
     return rows.map((row) => row.join(''))
 }
@@ -419,14 +428,14 @@ function stand(g: Grid, d: Dim, m: Move): void {
     const leg = (hip: number, [dx, lift]: [number, number], near: boolean): void => {
         const fx = hip + dx, fy = GY - lift
         g.line(hip, hipY, fx, fy, d.lw, near ? 'leg' : 'farleg')
-        if (near) g.rect(fx - (d.lw - 1) / 2 - 0.5, fy - 1, fx + d.lw / 2, fy, 'b', 'paw')
+        if (near) g.rect(fx - (d.lw - 1) / 2 - 1, fy - 1, fx + d.lw / 2, fy, 'b', 'paw').put(fx - (d.lw - 1) / 2 - 1, fy - 1, '.') // 앞쪽이 둥근 발
     }
     leg(front - 3, m.feet[1], false) // 먼 쪽 다리는 짙게
     leg(back + 3, m.feet[3], false)
 
     // 몸통
-    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 3.2) // 끝이 뭉툭한 몸통 (타원이면 양끝이 뾰족해 생선처럼 보인다)
-    g.ellipse(bx - d.rx * 0.45, by + 1, d.rx * 0.4, d.ry * 0.95, 'b', 'body') // 엉덩이(허벅지) 살
+    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.6) // 끝이 둥근 콩 모양 몸통 (지수 2면 양끝이 뾰족해 생선처럼 보인다)
+    g.ellipse(bx - d.rx * 0.5, by + 0.5, d.rx * 0.45, d.ry * 1.05, 'b', 'body') // 통통한 엉덩이
     g.ellipse(bx + d.rx - 5, by - d.ry * 0.3, 5, d.ry * 0.8, 'b', 'body') // 목
     g.retag(bx - d.rx, by + d.ry * 0.4, bx + d.rx, by + d.ry, 'body', 'under') // 배
     g.retag(bx + d.rx * 0.55, by - d.ry * 0.3, bx + d.rx, by + d.ry * 0.4, 'body', 'chest') // 가슴
