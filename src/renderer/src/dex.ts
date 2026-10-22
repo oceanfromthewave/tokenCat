@@ -149,7 +149,7 @@ function renderBook(collection: Completed[]): HTMLElement {
             const found = byCoat.get(c.id)
             const last = found?.[found.length - 1]
             const card = el('div', `card ${rarity}${found ? '' : ' locked'}`)
-            card.append(catCanvas(last ?? {coat: c.id, gear: {}}, 2, !found), el('span', '', found ? c.name.replace(/^코리안 숏헤어 ((.*))$/, '$1') : '???'))
+            card.append(catCanvas(last ?? {coat: c.id, gear: {}}, 2, !found), el('span', '', found ? c.name.replace(/^코리안 숏헤어 \((.*)\)$/, '$1') : '???'))
             if (found) card.append(el('small', '', `${found.length}마리 · 처음 ${day(found[0].completedAt)}`))
             grid.append(card)
         }
