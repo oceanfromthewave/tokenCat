@@ -4,7 +4,8 @@
 // 몸은 옆모습(오른쪽을 봄), 얼굴은 정면이다. 왼쪽을 볼 때는 화면에서 뒤집는다.
 import type {CoatId, Gear, StageId} from './growth.ts'
 
-export type Pose = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap' | 'happy'
+// eat(밥 먹기), stretch(일어서서 스크래쳐 긁기)는 도감의 방에서만 쓴다
+export type Pose = 'sit' | 'walk' | 'run' | 'sleep' | 'groom' | 'leap' | 'happy' | 'eat' | 'stretch'
 
 export const GRID_W = 56
 export const GRID_H = 44
@@ -12,7 +13,9 @@ const GY = GRID_H - 2 // 발바닥 줄 (아래 한 줄은 테두리용)
 const AX = 27 // 몸의 가운데
 
 // 포즈별 프레임 수
-export const FRAMES: Record<Pose, number> = {sit: 2, walk: 4, run: 4, sleep: 2, groom: 2, leap: 1, happy: 2}
+export const FRAMES: Record<Pose, number> = {sit: 2, walk: 4, run: 4, sleep: 2, groom: 2, leap: 1, happy: 2, eat: 2, stretch: 2}
+// 포즈별 초당 프레임 (작업표시줄과 도감의 방이 같이 쓴다)
+export const POSE_FPS: Record<Pose, number> = {sit: 1.5, walk: 7, run: 12, groom: 3, sleep: 0.7, leap: 1, happy: 4, eat: 3, stretch: 4}
 
 // 단계별 몸 크기. 머리는 크기가 거의 그대로라서, 아기일수록 몸에 비해 머리가 크고 어른이 될수록 몸이 길고 늠름해진다.
 interface Dim {
@@ -27,7 +30,7 @@ interface Dim {
 }
 
 const DIMS: Record<StageId, Dim> = {
-    baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 3, tail: 8, tw: 1.2},
+    baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 2, tail: 8, tw: 1.2},
     kitten: {rx: 10, ry: 5.2, head: 8, ear: 5, leg: 6, lw: 3, tail: 11, tw: 1.4},
     young: {rx: 12, ry: 6, head: 8, ear: 5, leg: 7, lw: 4, tail: 13, tw: 1.6},
     adult: {rx: 14, ry: 6.5, head: 8, ear: 5, leg: 8, lw: 4, tail: 15, tw: 1.7}
@@ -349,6 +352,7 @@ interface Move {
     headDy: number
     tail: 'up' | 'back'
     sway: number // 꼬리 흔들림
+    eat?: number // 있으면 고개를 바닥까지 숙여 밥을 먹는다 (값 = 고개 까딱임)
 }
 
 // 발 위치 [앞뒤, 들어올림] (가까운 앞다리, 먼 앞다리, 가까운 뒷다리, 먼 뒷다리). 12칸 몸 기준이라 단계 크기에 맞게 늘린다.
@@ -367,7 +371,19 @@ const RUN: Feet[] = [
     [[-2, 0], [-3, 0], [2, 0], [3, 0]],
     [[2, 1], [1, 1], [-2, 1], [-1, 1]]
 ]
-const scaleFeet = (feet: Feet, k: number): Feet => feet.map(([dx, lift]) => [Math.round(dx * k), Math.round(lift * k)])
+// 다리가 짧은 고양이(아기, 먼치킨)의 달리기: 다리를 크게 벌리지 않고 통통 튀듯 달린다. 몸이 위아래로 움직인다.
+const SHORT_RUN: Feet[] = [
+    [[1, 1], [1, 0], [-1, 1], [-1, 0]],
+    [[0, 0], [0, 0], [0, 0], [0, 0]],
+    [[-1, 0], [-1, 1], [1, 0], [1, 1]],
+    [[0, 0], [0, 0], [0, 0], [0, 0]]
+]
+
+// 다리가 짧으면(아기, 먼치킨) 보폭과 들어올림을 다리 길이에 맞게 줄인다. 그대로 두면 짧은 다리가 옆으로 누워 뭉개진다.
+const scaleFeet = (feet: Feet, k: number, leg: number): Feet => feet.map(([dx, lift]) => {
+    const maxDx = Math.max(1, Math.floor(leg * 0.5)), maxLift = Math.max(1, Math.floor(leg * 0.35))
+    return [Math.max(-maxDx, Math.min(maxDx, Math.round(dx * k))), Math.min(maxLift, Math.round(lift * k))]
+})
 
 function tailDraw(g: Grid, d: Dim, pts: [number, number][]): void {
     g.tailAt = pts[Math.floor(pts.length * 0.45)]
@@ -410,7 +426,8 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(front, m.feet[0], true)
     leg(back, m.feet[2], true)
 
-    face(g, bx + d.rx - 2, by - d.ry * 0.6 - 2 + m.headDy, d, 'open')
+    if (m.eat !== undefined) face(g, bx + d.rx + 1, GY - 7 + m.eat, d, 'closed') // 앞으로 숙여 그릇에 입을 댄다
+    else face(g, bx + d.rx - 2, by - d.ry * 0.6 - 2 + m.headDy, d, 'open')
 }
 
 // ---- 앉은 포즈 ----
@@ -452,6 +469,33 @@ function sit(g: Grid, d: Dim, o: { tail: number; lick?: number; happy?: boolean 
         g.rect(px, py, px + d.lw - 1, Math.round(Y(7)), 'b', 'leg')
         g.rect(px - 1, py, px + d.lw - 1, py + 1, 'b', 'paw')
         g.put(px, py, 'p', 'paw') // 분홍 발바닥이 보이게
+    }
+}
+
+// ---- 일어서서 스크래쳐 긁기 ----
+// 뒷다리로 서고 앞발 둘을 앞쪽 위로 뻗는다. 프레임마다 두 앞발 높이가 엇갈려 긁는 것처럼 보인다.
+function stretch(g: Grid, d: Dim, frame: number): void {
+    const s = d.rx / 12
+    const X = (dx: number): number => AX + dx * s
+    const Y = (dy: number): number => GY - dy * s
+    g.bodyO = [Math.round(X(0)), Math.round(Y(12))]
+    // 꼬리는 바닥으로 늘어뜨린다
+    const L = Math.max(5, Math.round(d.tail * 0.6))
+    tailDraw(g, d, Array.from({length: L}, (_, i): [number, number] => [X(-6) - i, GY - d.tw - Math.max(0, i - L + 3)]))
+    g.at('body')
+    g.ellipse(X(-2.5), Y(4.5), 6 * s, 4.5 * s, 'b') // 엉덩이
+    g.ellipse(X(1), Y(12), 4 * s + 0.5, 8.5 * s, 'b') // 세운 몸통
+    g.retag(X(-9), Y(3), X(6), GY, 'body', 'under')
+    g.rect(Math.round(X(-1)), Y(3), Math.round(X(2)), GY, 'b', 'leg') // 뒷발
+    g.rect(Math.round(X(-1)), GY - 1, Math.round(X(2)), GY, 'b', 'paw')
+    g.ellipse(X(3), Y(13), 2 * s + 0.5, 4.5 * s, 'b', 'chest')
+    const hx = Math.round(X(3)), hy = Math.round(Y(21))
+    face(g, hx, hy, d, 'open')
+    // 앞발 두 개: 어깨에서 앞쪽 위(스크래쳐 기둥)로
+    for (const [near, up] of [[false, frame ? 1 : 3], [true, frame ? 3 : 1]] as const) {
+        const px = Math.round(X(10)), py = Math.round(Y(10 + up))
+        g.line(X(3.5), Y(11), px, py, d.lw, near ? 'leg' : 'farleg')
+        if (near) g.rect(px, py - 1, px + d.lw - 1, py, 'b', 'paw')
     }
 }
 
@@ -523,10 +567,16 @@ function build(stage: StageId, coat: CoatId, pose: Pose, frame: number, gear: Ge
             sleep(g, d, frame)
             break
         case 'walk':
-            stand(g, d, {feet: scaleFeet(WALK[frame], k), bob: frame % 2, headDy: frame % 2, tail: 'up', sway: [0, 1, 0, -1][frame]})
+            stand(g, d, {feet: scaleFeet(WALK[frame], k, d.leg), bob: frame % 2, headDy: frame % 2, tail: 'up', sway: [0, 1, 0, -1][frame]})
             break
         case 'run':
-            stand(g, d, {feet: scaleFeet(RUN[frame], k), bob: [0, -1, 0, -1][frame], headDy: 1, tail: 'back', sway: [0, 1, 0, -1][frame]})
+            stand(g, d, {feet: d.leg <= 4 ? SHORT_RUN[frame] : scaleFeet(RUN[frame], k, d.leg), bob: d.leg <= 4 ? [-1, 0, -1, 0][frame] : [0, -1, 0, -1][frame], headDy: 1, tail: 'back', sway: [0, 1, 0, -1][frame]})
+            break
+        case 'eat':
+            stand(g, d, {feet: [[1, 0], [0, 0], [-1, 0], [0, 0]], bob: 0, headDy: 0, tail: 'up', sway: frame, eat: frame})
+            break
+        case 'stretch':
+            stretch(g, d, frame)
             break
         case 'leap':
             stand(g, d, {feet: [[s(6), s(3)], [s(4), s(2)], [-s(6), s(3)], [-s(4), s(2)]], bob: -1, headDy: -1, tail: 'back', sway: 1})

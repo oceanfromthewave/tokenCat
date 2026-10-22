@@ -1,4 +1,4 @@
-import {INITIAL_CAT, SLOTS, addXp, isCoatId, isGearId, type CatState, type Completed, type Gear} from './growth.ts'
+import {HARVEST_LEVEL, INITIAL_CAT, SLOTS, addXp, isCoatId, isGearId, type CatState, type Completed, type Gear} from './growth.ts'
 
 // 사용자 설정. 저장 파일에서 읽을 때도, 화면(IPC)에서 바꿀 때도 항상 mergeSettings로 검증한다.
 export interface Settings {
@@ -23,12 +23,13 @@ export function mergeSettings(current: Settings, patch: unknown): Settings {
 export interface SaveData {
     cat: CatState
     collection: Completed[] // 다 키워서 도감에 올린 고양이
+    levelUps: number // 지금까지 오른 레벨 수 (고양이가 바뀌어도 계속 쌓인다. 방 가구가 여기에 따라 생긴다)
     processed: string[] // 이미 경험치로 반영한 사용 기록 키 (중복 보상 방지)
     settings: Settings
     logOffsets: Record<string, number> | null // 로그 파일별 읽은 위치. null = 아직 기준선 없음(첫 실행)
 }
 
-export const EMPTY_SAVE: SaveData = {cat: INITIAL_CAT, collection: [], processed: [], settings: DEFAULT_SETTINGS, logOffsets: null}
+export const EMPTY_SAVE: SaveData = {cat: INITIAL_CAT, collection: [], levelUps: 0, processed: [], settings: DEFAULT_SETTINGS, logOffsets: null}
 
 const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v)
 
@@ -76,7 +77,12 @@ export function parseSave(text: string): SaveData {
                 .map((c: Completed) => ({coat: c.coat, gear: parseGear(c.gear), completedAt: c.completedAt}))
             : []
         // 레벨 기준보다 xp가 크면 레벨업으로 정리
-        return {cat: addXp({level, xp: 0, coat, gear: parseGear(raw.cat.gear)}, xp), collection, processed, settings: mergeSettings(DEFAULT_SETTINGS, raw.settings), logOffsets}
+        const cat = addXp({level, xp: 0, coat, gear: parseGear(raw.cat.gear)}, xp)
+        // 레벨업 수가 없는 예전 저장 파일은 지금 레벨과 다 키운 수로 계산한다
+        const levelUps = Number.isInteger(raw.levelUps) && raw.levelUps >= 0 && raw.levelUps <= 1e7
+            ? raw.levelUps
+            : cat.level - 1 + collection.length * (HARVEST_LEVEL - 1)
+        return {cat, collection, levelUps, processed, settings: mergeSettings(DEFAULT_SETTINGS, raw.settings), logOffsets}
     } catch {
         return EMPTY_SAVE
     }

@@ -3,12 +3,27 @@ import {COATS, HARVEST_LEVEL, SLOTS, coatName, gearName, stageOf, type CatState,
 import {GRID_H, GRID_W} from '../../shared/sprites'
 import type {AppState} from '../../preload/index'
 import {spriteFor} from './draw'
+import {mountRoom} from './room'
+import {FURNITURE, unlockedAt} from '../../shared/room'
 
 const SCALE = 2
 
 document.title = 'Token Cat 도감'
+document.documentElement.className = 'dex'
 document.body.className = 'dex'
 document.body.replaceChildren()
+
+let latest: AppState | null = null
+
+// 고양이 방: 한 번만 만들고 계속 움직인다. 아래 내용은 상태가 바뀔 때마다 다시 그린다.
+const roomBox = document.createElement('section')
+roomBox.className = 'room'
+const roomCanvas = document.createElement('canvas')
+const roomNote = document.createElement('p')
+roomNote.className = 'muted'
+roomBox.append(roomCanvas, roomNote)
+const content = document.createElement('div')
+document.body.append(roomBox, content)
 
 // 태그 하나를 만든다. 내용은 textContent로만 넣어서 저장 파일 값이 HTML로 해석되지 않게 한다.
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', text = ''): HTMLElementTagNameMap[K] {
@@ -32,7 +47,20 @@ function catCanvas(cat: Pick<CatState, 'coat' | 'gear'> & { level?: number }, si
 const gearText = (gear: Gear): string => SLOTS.filter((s) => gear[s]).map((s) => gearName(s, gear[s]!)).join(', ') || '소품 없음'
 const day = (iso: string): string => iso.slice(0, 10)
 
-function render({cat, collection}: AppState): void {
+// 다음에 생길 가구 안내
+function nextFurniture(levelUps: number, cats: number): string {
+    const has = unlockedAt({levels: levelUps, cats})
+    const next = FURNITURE.find((f) => !has.includes(f))
+    const count = `가구 ${has.length} / ${FURNITURE.length}`
+    if (!next) return `${count} · 방을 다 꾸몄어요!`
+    const need = 'levels' in next.unlock ? `레벨업 ${next.unlock.levels - levelUps}번 더` : `고양이 ${next.unlock.cats - cats}마리 더 키우면`
+    return `${count} · 다음 가구: ${next.name} (${need})`
+}
+
+function render(state: AppState): void {
+    const {cat, collection} = state
+    latest = state
+    roomNote.textContent = nextFurniture(state.levelUps, collection.length)
     const byCoat = new Map<string, Completed[]>()
     for (const c of collection) byCoat.set(c.coat, [...(byCoat.get(c.coat) ?? []), c])
 
@@ -63,8 +91,11 @@ function render({cat, collection}: AppState): void {
     if (!collection.length) history.append(el('p', 'muted', `아직 없어요. Lv.${HARVEST_LEVEL}까지 키우면 여기에 남아요.`))
     for (const c of [...collection].reverse()) history.append(el('p', '', `${day(c.completedAt)} · ${coatName(c.coat)} · ${gearText(c.gear)}`))
 
-    document.body.replaceChildren(head, now, grid, history)
+    content.replaceChildren(head, now, grid, history)
 }
 
-void window.api.getState().then(render)
+void window.api.getState().then((s) => {
+    render(s)
+    mountRoom(roomCanvas, () => ({cat: latest!.cat, levelUps: latest!.levelUps, cats: latest!.collection.length}))
+})
 window.api.onStateChanged(render)

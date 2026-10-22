@@ -4,6 +4,7 @@ import type {CatState, Completed} from '../shared/growth'
 export interface AppState {
     cat: CatState
     collection: Completed[] // 다 키워서 도감에 올린 고양이
+    levelUps: number // 지금까지 오른 레벨 수 (방 가구)
     gainedXp?: number // 이번 변경으로 얻은 경험치 (알림 표시용)
 }
 

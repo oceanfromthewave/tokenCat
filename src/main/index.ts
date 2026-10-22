@@ -17,6 +17,7 @@ const POLL_MS = 30_000
 // 고양이 상태의 단일 출처. 렌더러는 IPC로 읽고 변경 알림을 받는다.
 let cat: CatState = INITIAL_CAT
 let collection: Completed[] = [] // 다 키워서 도감에 올린 고양이
+let levelUps = 0 // 지금까지 오른 레벨 수 (방 가구)
 let processed: string[] = []
 let logOffsets: Offsets | null = null
 let settings: Settings = DEFAULT_SETTINGS
@@ -26,7 +27,7 @@ let dexWin: BrowserWindow | null = null
 let askedVersion: string | null = null // 이번 실행에서 이미 물어본 버전 (같은 버전을 반복해서 묻지 않는다)
 
 function persist(): void {
-    writeSave({cat, collection, processed, settings, logOffsets})
+    writeSave({cat, collection, levelUps, processed, settings, logOffsets})
 }
 
 // 작업표시줄 바로 위, 주 모니터 작업 영역의 가로 전체. (작업표시줄이 어디에 있든 작업 영역 아래쪽을 따라간다)
@@ -66,7 +67,7 @@ function fitToTaskbar(): void {
     if (b.x !== cur.x || b.y !== cur.y || b.width !== cur.width || b.height !== cur.height) win.setBounds(b)
 }
 
-const getState = (): { cat: CatState; collection: Completed[] } => ({cat, collection})
+const getState = (): { cat: CatState; collection: Completed[]; levelUps: number } => ({cat, collection, levelUps})
 const send = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload)
 }
@@ -91,8 +92,8 @@ function openDex(): void {
         return
     }
     dexWin = new BrowserWindow({
-        width: 560,
-        height: 680,
+        width: 580,
+        height: 760,
         title: 'Token Cat 도감',
         autoHideMenuBar: true,
         webPreferences: {preload: join(__dirname, '../preload/index.js')}
@@ -107,6 +108,7 @@ function openDex(): void {
 function ingestUsage(records: UsageRecord[]): void {
     const result = applyUsage(cat, processed, records)
     const changed = result.processed !== processed
+    levelUps += Math.max(0, result.cat.level - cat.level)
     cat = result.cat
     processed = result.processed
     const harvested = settle()
@@ -311,9 +313,11 @@ if (!app.requestSingleInstanceLock()) {
         processed = save.processed
         logOffsets = save.logOffsets
         collection = save.collection
+        levelUps = save.levelUps
         settle() // 저장된 레벨에 맞는 소품을 주고, 이미 다 컸으면 도감에 올린다
         createWindow()
         createTray()
+        if (!app.isPackaged && process.env.TOKENCAT_DEX) openDex() // 개발 확인용: 실행하자마자 도감 열기
         screen.on('display-added', fitToTaskbar)
         screen.on('display-removed', fitToTaskbar)
         screen.on('display-metrics-changed', fitToTaskbar)

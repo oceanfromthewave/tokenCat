@@ -113,9 +113,20 @@ html, body {
 }
 
 /* ---- 도감 창 ---- */
+/* 작업표시줄 창은 스크롤을 막지만, 도감은 내용이 길어서 스크롤한다 */
+html.dex {
+  height: auto;
+  overflow-y: auto;
+  scrollbar-color: #c9a27a #efe4d4;
+}
+
+html.dex::-webkit-scrollbar { width: 12px; }
+html.dex::-webkit-scrollbar-track { background: #efe4d4; }
+html.dex::-webkit-scrollbar-thumb { background: #c9a27a; border: 3px solid #efe4d4; border-radius: 6px; }
+
 body.dex {
   height: auto;
-  overflow: auto;
+  overflow: visible;
   padding: 18px 20px 28px;
   background: #f7f0e4;
   color: #2a1f26;
@@ -160,3 +171,16 @@ body.dex .card {
 body.dex .card.locked { background: #e6ddd0; color: #8a7b6c; }
 body.dex .card small { color: #7a6a5c; }
 body.dex .history p { margin: 3px 0; font-size: 13px; }
+
+/* 방은 창 너비에 맞춰 늘어난다 (가로세로 비율 유지) */
+body.dex .room canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 260 / 100;
+  image-rendering: pixelated;
+  border: 2px solid #2a1f26;
+  border-radius: 10px;
+}
+
+body.dex .room p { margin: 6px 2px 0; }

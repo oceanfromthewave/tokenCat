@@ -1,8 +1,9 @@
 import {LEAP_SECONDS, force, start, step, type Behavior, type Mood} from '../../shared/behavior'
 import {HARVEST_LEVEL, INITIAL_CAT, SLOTS, coatName, formatXp, gearName, stageOf, xpToNextLevel, type CatState} from '../../shared/growth'
-import {GRID_H, GRID_W, type Pose} from '../../shared/sprites'
+import {GRID_H, GRID_W, POSE_FPS as FPS} from '../../shared/sprites'
 import type {AppState} from '../../preload/index'
 import {spriteFor, type Sprite} from './draw'
+import {newlyUnlocked} from '../../shared/room'
 
 const P = 2 // 도트 한 칸의 화면 크기(px)
 const EDGE = 2 // 그림 좌우 빈칸(칸). 이만큼은 화면 밖으로 나가도 된다.
@@ -25,13 +26,14 @@ let cat: CatState = INITIAL_CAT
 let lastGainAt = 0
 const startedAt = performance.now()
 
-const spriteOf = (pose: Pose, frame: number): Sprite => spriteFor(stageOf(cat.level).id, cat.coat, pose, frame, cat.gear)
+const spriteOf = (pose: Behavior['action'], frame: number): Sprite => spriteFor(stageOf(cat.level).id, cat.coat, pose, frame, cat.gear)
 
 // ---- 상태와 알림 ----
 let say = {text: '', until: 0}
 const showSay = (text: string, ms: number): void => void (say = {text, until: performance.now() + ms})
 
 let known = -1 // 도감에 올라간 고양이 수 (처음 받은 상태는 알림 없이 기억만 한다)
+let knownUps = 0 // 지금까지 오른 레벨 수
 
 // 상태가 바뀌면 무엇이 바뀌었는지 보고 말풍선을 띄운다. 다 큼 > 소품 > 단계 > 레벨 순으로 하나만.
 function apply(next: AppState): void {
@@ -40,14 +42,17 @@ function apply(next: AppState): void {
     if ((next.gainedXp ?? 0) > 0) lastGainAt = performance.now()
     const first = known < 0
     const grown = !first && next.collection.length > known
+    const furniture = newlyUnlocked({levels: knownUps, cats: Math.max(known, 0)}, {levels: next.levelUps, cats: next.collection.length})
     known = next.collection.length
+    knownUps = next.levelUps
     if (first) return
     if (grown) {
         showSay(`다 컸어요! ${coatName(before.coat)}은(는) 도감에 올라갔어요. 새 고양이가 왔어요`, 7000)
         return
     }
     const got = SLOTS.find((slot) => cat.gear[slot] && !before.gear[slot])
-    if (got) showSay(`${gearName(got, cat.gear[got]!)}을(를) 얻었어요!`, 5000)
+    if (furniture.length) showSay(`방에 ${furniture.join(', ')}이(가) 생겼어요! (도감에서 볼 수 있어요)`, 5000)
+    else if (got) showSay(`${gearName(got, cat.gear[got]!)}을(를) 얻었어요!`, 5000)
     else if (cat.level > before.level) {
         const stage = stageOf(cat.level)
         showSay(stage.id !== stageOf(before.level).id ? `${stage.name}이 됐어요!` : `레벨 ${cat.level}!`, 4000)
@@ -114,7 +119,6 @@ function statusText(): string {
 }
 
 // ---- 한 프레임 ----
-const FPS: Record<Pose, number> = {sit: 1.5, walk: 7, run: 12, groom: 3, sleep: 0.7, leap: 1, happy: 4}
 let prev = performance.now()
 let lastImage: HTMLCanvasElement | null = null
 

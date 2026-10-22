@@ -11,7 +11,9 @@ AI 사용 기록(토큰 숫자)을 경험치로 바꿔 작업표시줄 위를 �
 ## 구조
 - `src/shared/` 순수 로직(Electron 의존 없음, 테스트 옆에 둠): `growth.ts`(레벨/단계/털), `usage.ts`(토큰→XP, 멱등 `applyUsage`), `claudeCode.ts`·`codex.ts`(로그 한 줄→UsageRecord), `save.ts`(저장 검증·설정), `behavior.ts`(걷기/뛰기/앉기/자기 행동 규칙, 시간과 난수만 받음), `sprites.ts`(몸 부위를 그려 포즈·단계·털을 조합, 오른쪽 기준, 외곽선 자동).
 - `src/main/index.ts`: 고양이 상태의 단일 출처(`ingestUsage` 하나로만 상태 변경). 창은 주 모니터 작업 영역 아래쪽 가로 전체의 투명 띠 하나(`WIN_H`). 평소 `setIgnoreMouseEvents(true,{forward:true})`로 클릭이 통과하고, 렌더러가 고양이 위에 마우스가 올라갔다고 알릴 때만(`cat:capture`) 클릭을 받는다.
-- `src/renderer/src/main.ts`: React 없이 DOM+canvas 한 파일. 프레임마다 `behavior.step`을 돌리고 위치/그림을 갱신.
+- `src/shared/room.ts`: 도감 속 고양이 방. 기본 가구는 레벨업 수(`levelUps`, 고양이가 바뀌어도 누적), 특별 가구는 다 키운 수로 열린다. 방 고양이 행동 계획(`plan`/`roomStep`).
+- `src/renderer/src/`: React 없이 DOM+canvas. `main.ts`가 해시로 `overlay.ts`(작업표시줄) / `dex.ts`(도감, `#dex`)를 고른다. `room.ts`는 방 그림, `draw.ts`는 고양이 그림 캐시.
+- 개발 확인용: `TOKENCAT_DEX=1`로 개발 실행하면 도감 창이 바로 열린다(설치 앱에서는 무시).
 
 ## 지킬 규칙 (tokenGrove와 동일)
 - 프롬프트 본문·코드·파일 내용은 수집하지 않는다. 토큰 숫자·ID·시각만. 원본 로그는 읽기만 한다. `~/.codex/auth.json`은 절대 읽지 않는다.

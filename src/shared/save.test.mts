@@ -34,6 +34,11 @@ const old = parseSave(JSON.stringify({cat: {level: 2, xp: 0, coat: 'bengal'}, co
 assert.equal(old.cat.coat, 'munchkin')
 assert.deepEqual(old.collection.map((c) => c.coat), ['munchkin'])
 
+// 레벨업 수: 저장된 값이 있으면 그대로, 없거나 이상하면 레벨과 다 키운 수로 계산
+assert.equal(parseSave(JSON.stringify({cat: {level: 5, xp: 0}, levelUps: 40})).levelUps, 40)
+assert.equal(parseSave(JSON.stringify({cat: {level: 5, xp: 0}, collection: [{coat: 'black', completedAt: 'x'}]})).levelUps, 4 + 11)
+assert.equal(parseSave(JSON.stringify({cat: {level: 1, xp: 0}, levelUps: -3})).levelUps, 0)
+
 // 설정: 형식이 틀린 값은 무시
 assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, {claude: 'no', codex: false, hack: 1}), {claude: true, codex: false, updateCheck: true})
 assert.deepEqual(mergeSettings(DEFAULT_SETTINGS, null), DEFAULT_SETTINGS)
