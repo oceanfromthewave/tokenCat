@@ -198,7 +198,7 @@ class Grid {
                 if (c.pattern === 'tabby' && key === 'b') {
                     const stripe =
                         part === 'forehead' ||
-                        (part === 'body' && (((px % 6) + 6) % 6) < 2 && py < d.ry * 0.35) ||
+                        (part === 'body' && (((px + Math.floor(py / 3)) % 5) + 5) % 5 === 0 && py < d.ry * 0.3) ||
                         (part === 'tail' && (x + y) % 5 < 2) ||
                         (part === 'leg' && y % 4 === 0)
                     if (stripe) key = 'd'
@@ -238,55 +238,92 @@ class Grid {
     }
 }
 
-// ---- 얼굴 (3/4 옆모습, 오른쪽을 봄) ----
-// 몸과 같은 방향을 보는 얼굴이라 몸에 얼굴을 붙인 느낌이 덜하다. 앞쪽 눈은 크고 뒤쪽 눈은 반쯤 가려진다.
-function face(g: Grid, hx: number, hy: number, d: Dim, closed: boolean): void {
+// ---- 머리 (손으로 찍은 도트, 3/4 옆모습으로 오른쪽을 봄) ----
+// 얼굴은 귀여움이 결정되는 곳이라 계산으로 그리지 않고 한 칸씩 직접 찍었다. 모든 단계가 같은 머리를 쓴다.
+// (몸은 단계마다 커지므로 아기일수록 머리가 상대적으로 크다)
+// 글자: a 귀, i 귀 안쪽(분홍), h 머리털, r 이마 무늬 자리, m 주둥이, n 코, o 입,
+//       y 홍채, e 눈동자, w 눈빛, . 빈칸
+const EARS: Record<'normal' | 'small' | 'big' | 'fold' | 'tufts', string[]> = {
+    normal: [
+        '..a..........a..',
+        '.aaa........aaa.',
+        '.aiaa......aaia.',
+        'aaiiahhhhhhaiiaa'
+    ],
+    small: [ // 페르시안: 작고 낮은 귀
+        '................',
+        '................',
+        '.aaa........aaa.',
+        'aaiahhhhhhhhaiaa'
+    ],
+    big: [ // 스핑크스: 크고 넓은 귀
+        '..a..........a..',
+        '.aaa........aaa.',
+        '.aiaa......aaia.',
+        'aaiia......aiiaa',
+        'aaiiaa....aaiiaa',
+        'aaiiiahhhhaiiiaa'
+    ],
+    fold: [ // 스코티시 폴드: 앞으로 접혀 머리에 붙은 귀
+        '................',
+        '................',
+        '..aaa......aaa..',
+        '.aaaahhhhhhaaaa.'
+    ],
+    tufts: [ // 메인쿤: 귀 끝 털
+        '..a..........a..',
+        '..a..........a..',
+        '.aaa........aaa.',
+        '.aiaa......aaia.',
+        'aaiiahhhhhhaiiaa'
+    ]
+}
+
+const HEAD = [
+    'hhhhhhrhhrhhhhhh',
+    'hhhhyyhrhhhyyhhh',
+    'hhhyweyhhhweyhhh',
+    'hhhyeeyhhheeyhhh',
+    'hhhyeeyhhheeymmm',
+    'hhhhyyhhhhyymmnn',
+    'hhhhhhhhhhmmmmom',
+    'hhhhhhhhhmmmoom.',
+    '.hhhhhhhhmmmmm..',
+    '..hhhhhhhhhmm...'
+]
+
+// 감은 눈: 웃는 모양(^)
+const CLOSED = [
+    'hhhhhhrhhrhhhhhh',
+    'hhhhhhhrhhhhhhhh',
+    'hhhhhhhhhhhhhhhh',
+    'hhhhoohhhhoohhhh',
+    'hhhohhohhhhhohmm',
+    'hhhhhhhhhhhhmmnn',
+    'hhhhhhhhhhmmmmom',
+    'hhhhhhhhhmmmoom.',
+    '.hhhhhhhhmmmmm..',
+    '..hhhhhhhhhmm...'
+]
+
+const HEAD_PARTS: Record<string, [string, Part]> = {
+    a: ['b', 'ear'], i: ['p', 'ear'], h: ['b', 'head'], r: ['b', 'forehead'], m: ['b', 'muzzle'], n: ['p', 'head'],
+    o: ['o', 'head'], y: ['y', 'head'], e: ['e', 'head'], w: ['w', 'head']
+}
+
+// 머리 도장을 (hx, hy)가 머리 가운데가 되게 찍는다
+function face(g: Grid, hx: number, hy: number, _d: Dim, closed: boolean): void {
     hx = Math.round(hx)
     hy = Math.round(hy)
-    const rx = d.head * 1.05, ry = d.head * 0.9
     g.headO = [hx, hy]
-    g.at('head').ellipse(hx, hy, rx, ry, 'b', 'head', 2.4)
-    g.ellipse(hx - rx * 0.5, hy + ry * 0.7, rx * 0.35, ry * 0.3, 'b', 'head') // 볼 털
-    g.ellipse(hx + rx * 0.78, hy + ry * 0.38, rx * 0.36, ry * 0.32, 'b', 'muzzle') // 튀어나온 주둥이
-    // 귀: 가까운 귀는 크고, 먼 귀는 조금 작다. 안쪽은 분홍.
-    const earH = d.ear + (g.look.ear ?? 0)
-    const wmax = Math.max(3, Math.round(d.head * 0.55))
-    for (const [fx, tall] of [[-0.42, 0], [0.5, 1]] as const) {
-        const ex = Math.round(hx + rx * fx)
-        if (g.look.fold) {
-            // 접힌 귀: 머리 위에 납작하게 붙는다
-            g.rect(ex - 2, hy - ry + 1, ex + 2, hy - ry + 2, 'b', 'ear').rect(ex - 1, hy - ry, ex + 1, hy - ry, 'b', 'ear')
-            continue
-        }
-        const h = earH - tall
-        const top = Math.round(hy - ry - h + 2)
-        if (g.look.tufts) g.put(ex, top - 1, 'b', 'ear').put(ex, top - 2, 'b', 'ear') // 귀 끝 털
-        for (let i = 0; i < h; i++) {
-            const w = 1 + Math.round((i * (wmax - 1)) / (h - 1))
-            g.rect(ex - Math.floor((w - 1) / 2), top + i, ex + Math.ceil((w - 1) / 2), top + i, 'b', 'ear')
-            if (i >= 2 && w >= 4) g.rect(ex - Math.floor((w - 3) / 2), top + i, ex + Math.ceil((w - 3) / 2), top + i, 'p', 'ear')
-        }
-    }
-    // 이마 줄무늬 자리 (줄무늬 털에서만 짙게 칠해진다)
-    for (const [dx, len] of [[-1, 2], [2, 3], [5, 2]] as const) g.rect(hx + dx, hy - ry + 1, hx + dx, hy - ry + len, 'b', 'forehead')
-    // 눈: 앞쪽(가까운) 눈은 4x5, 뒤쪽 눈은 3x5. 모서리를 둥글리고, 세로로 긴 눈동자와 눈빛을 넣는다.
-    const ey = Math.round(hy - ry * 0.28)
-    const eye = (x0: number, w: number): void => {
-        if (closed) {
-            g.put(x0, ey + 3, 'o', 'head').put(x0 + w - 1, ey + 3, 'o', 'head')
-            g.rect(x0 + 1, ey + 2, x0 + w - 2, ey + 2, 'o', 'head')
-            return
-        }
-        for (let r = 0; r < 5; r++) for (let c = 0; c < w; c++) if (!((r === 0 || r === 4) && (c === 0 || c === w - 1))) g.put(x0 + c, ey + r, 'y', 'head')
-        g.rect(x0 + 1, ey + 1, x0 + w - 2, ey + 4, 'e', 'head')
-        g.put(x0 + 1, ey + 1, 'w', 'head')
-    }
-    eye(Math.round(hx + rx * 0.1), 4)
-    eye(Math.round(hx + rx * 0.62), 3)
-    // 코와 입
-    const nx = Math.round(hx + rx * 1.08), ny = Math.round(hy + ry * 0.22)
-    g.rect(nx - 1, ny, nx, ny, 'p', 'head')
-    g.put(nx - 1, ny + 2, 'o', 'head').put(nx - 2, ny + 3, 'o', 'head').put(nx - 3, ny + 3, 'o', 'head')
+    const look = g.look
+    const ears = EARS[look.fold ? 'fold' : look.tufts ? 'tufts' : (look.ear ?? 0) > 0 ? 'big' : (look.ear ?? 0) < 0 ? 'small' : 'normal']
+    const rows = [...ears, ...(closed ? CLOSED : HEAD)]
+    const x0 = hx - 8, y0 = hy - 7 - (ears.length - 4)
+    rows.forEach((row, dy) => [...row].forEach((ch, dx) => {
+        const hit = HEAD_PARTS[ch]
+        if (hit) g.put(x0 + dx, y0 + dy, hit[0], hit[1])
+    }))
 }
 
 // ---- 서 있는 포즈 (걷기, 달리기, 뛰기) ----
@@ -337,7 +374,7 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(back + 3, m.feet[3], false)
 
     // 몸통
-    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.6)
+    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.3)
     g.ellipse(bx - d.rx * 0.45, by + 1, d.rx * 0.4, d.ry * 0.95, 'b', 'body') // 엉덩이(허벅지) 살
     g.ellipse(bx + d.rx - 5, by - d.ry * 0.3, 5, d.ry * 0.8, 'b', 'body') // 목
     g.retag(bx - d.rx, by + d.ry * 0.4, bx + d.rx, by + d.ry, 'body', 'under') // 배
@@ -346,7 +383,7 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(front, m.feet[0], true)
     leg(back, m.feet[2], true)
 
-    face(g, bx + d.rx - 4, by - d.ry * 0.5 + m.headDy, d, false)
+    face(g, bx + d.rx - 2, by - d.ry * 0.6 - 2 + m.headDy, d, false)
 }
 
 // ---- 앉은 포즈 ----
