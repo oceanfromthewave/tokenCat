@@ -44,6 +44,14 @@ export const isCoatId = (v: unknown): v is CoatId => COATS.some((c) => c.id === 
 
 export const coatName = (id: CoatId): string => COATS.find((c) => c.id === id)?.name ?? id
 
+// 흔한 정도 (도감 표시용): 가중치 5 이상 흔함, 3~4 드묾, 그 아래 희귀
+export type Rarity = 'common' | 'uncommon' | 'rare'
+export const RARITY_NAME: Record<Rarity, string> = {common: '흔함', uncommon: '드묾', rare: '희귀'}
+export function rarityOf(id: CoatId): Rarity {
+    const w = COATS.find((c) => c.id === id)?.weight ?? 0
+    return w >= 5 ? 'common' : w >= 3 ? 'uncommon' : 'rare'
+}
+
 // 소품. 정해진 레벨이 되면 칸마다 하나씩 무작위로 얻고, 다 클 때까지 계속 하고 다닌다.
 export const GEAR = {
     neck: [

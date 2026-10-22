@@ -1,6 +1,6 @@
 // 실행: npm test
 import assert from 'node:assert/strict'
-import {COATS, GEAR, GEAR_LEVEL, HARVEST_LEVEL, INITIAL_CAT, STAGES, addXp, grantGear, harvestIfReady, newCat, stageOf, xpToNextLevel} from './growth.ts'
+import {COATS, GEAR, rarityOf, GEAR_LEVEL, HARVEST_LEVEL, INITIAL_CAT, STAGES, addXp, grantGear, harvestIfReady, newCat, stageOf, xpToNextLevel} from './growth.ts'
 
 // 레벨업 경계: 100xp면 정확히 레벨 2, 99.9는 그대로
 assert.deepEqual(addXp(INITIAL_CAT, 100), {...INITIAL_CAT, level: 2, xp: 0})
@@ -50,5 +50,10 @@ assert.deepEqual(h.collection, [{coat: 'munchkin', gear: lv9.gear, completedAt: 
 assert.deepEqual(h.cat, {level: 1, xp: 0, coat: COATS[0].id, gear: {}})
 const not = harvestIfReady({...grown, level: HARVEST_LEVEL - 1}, [], 'x')
 assert.equal(not.collection.length, 0)
+
+// 흔한 정도: 코리안 숏헤어는 흔함, 품종묘는 드묾, 희귀 품종은 희귀
+assert.equal(rarityOf('orange'), 'common')
+assert.equal(rarityOf('british'), 'uncommon')
+assert.equal(rarityOf('ragdoll'), 'rare')
 
 console.log('growth: all checks passed')

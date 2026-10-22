@@ -125,62 +125,122 @@ html.dex::-webkit-scrollbar-track { background: #efe4d4; }
 html.dex::-webkit-scrollbar-thumb { background: #c9a27a; border: 3px solid #efe4d4; border-radius: 6px; }
 
 body.dex {
+  --ink: #2a1f26;
+  --paper: #fffaf2;
+  --muted: #7a6a5c;
+  --line: #e3d3bd;
+  --accent: #ec9f4a;
   height: auto;
   overflow: visible;
-  padding: 18px 20px 28px;
-  background: #f7f0e4;
-  color: #2a1f26;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 16px 18px 28px;
+  background: #f7f0e4 radial-gradient(#efe2cf 1px, transparent 1px) 0 0 / 14px 14px;
+  color: var(--ink);
   user-select: text;
 }
 
 body.dex h1 { margin: 0; font-size: 22px; }
-body.dex h2 { margin: 18px 0 8px; font-size: 15px; }
-body.dex .sub, body.dex .muted { margin: 4px 0; color: #7a6a5c; font-size: 13px; }
+body.dex h2 { margin: 0 0 10px; font-size: 15px; }
+body.dex h3 { margin: 14px 0 8px; font-size: 13px; color: var(--muted); }
+body.dex .sub, body.dex .muted { margin: 4px 0; color: var(--muted); font-size: 13px; }
 body.dex canvas.cat { image-rendering: pixelated; display: block; }
 
-body.dex .now {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 4px 12px;
-  padding: 4px 12px 10px;
-  border: 2px solid #2a1f26;
-  border-radius: 10px;
-  background: #fffaf2;
+body.dex .panel {
+  margin-top: 14px;
+  padding: 12px 14px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: 0 3px 0 var(--ink);
 }
-body.dex .now h2 { grid-column: 1 / -1; }
-body.dex .now p { margin: 4px 0; font-size: 13px; }
 
-body.dex .grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-  gap: 8px;
-  margin-top: 16px;
+/* 맨 위 제목과 요약 칩 */
+body.dex .banner {
+  padding: 16px 16px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 12px;
+  background: linear-gradient(135deg, #ffd9a8, #ffc4d0);
+  box-shadow: 0 3px 0 var(--ink);
 }
-body.dex .card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 6px 4px 8px;
-  border: 2px solid #2a1f26;
-  border-radius: 10px;
-  background: #fffaf2;
-  font-size: 12px;
-  text-align: center;
-}
-body.dex .card.locked { background: #e6ddd0; color: #8a7b6c; }
-body.dex .card small { color: #7a6a5c; }
-body.dex .history p { margin: 3px 0; font-size: 13px; }
+body.dex .chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; margin-top: 12px; }
+body.dex .chip { padding: 6px 10px; border: 2px solid var(--ink); border-radius: 10px; background: var(--paper); }
+body.dex .chip small { display: block; color: var(--muted); font-size: 11px; }
+body.dex .chip b { font-size: 14px; }
 
-/* 방은 창 너비에 맞춰 늘어난다 (가로세로 비율 유지) */
+/* 방 (창 너비에 맞춰 늘어난다, 가로세로 비율 유지) */
 body.dex .room canvas {
   display: block;
   width: 100%;
   height: auto;
   aspect-ratio: 260 / 100;
   image-rendering: pixelated;
-  border: 2px solid #2a1f26;
-  border-radius: 10px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
 }
+body.dex .furniture { display: grid; grid-template-columns: repeat(auto-fill, minmax(86px, 1fr)); gap: 6px; margin-top: 10px; }
+body.dex .furniture .item { padding: 4px 6px; border: 1px solid var(--line); border-radius: 8px; background: #fff3e2; text-align: center; }
+body.dex .furniture .item b { display: block; font-size: 12px; }
+body.dex .furniture .item small { color: var(--muted); font-size: 11px; }
+body.dex .furniture .item.locked { background: #efe6da; color: var(--muted); }
 
-body.dex .room p { margin: 6px 2px 0; }
+/* 지금 키우는 고양이 */
+body.dex .now { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: start; }
+body.dex .now h2 { grid-column: 1 / -1; }
+body.dex .now .pic { padding: 4px; border-radius: 10px; background: #fdebd3; }
+body.dex .now h3 { margin: 4px 0 2px; font-size: 16px; color: var(--ink); }
+body.dex .now p { margin: 0 0 8px; font-size: 13px; }
+body.dex .meter { margin: 6px 0; }
+body.dex .meter .track { height: 8px; border: 1px solid var(--ink); border-radius: 5px; background: #f0e2cf; overflow: hidden; }
+body.dex .meter i { display: block; height: 100%; background: var(--accent); }
+body.dex .meter small { color: var(--muted); font-size: 11px; }
+body.dex .stages { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+body.dex .stages span { padding: 2px 7px; border-radius: 10px; background: #efe6da; color: var(--muted); font-size: 11px; }
+body.dex .stages span.on { background: #ffd9a8; color: var(--ink); }
+body.dex .slots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+body.dex .slot { padding: 5px 7px; border: 1px dashed #c9b49b; border-radius: 8px; color: var(--muted); }
+body.dex .slot.on { border: 1px solid var(--ink); background: #fff0f4; color: var(--ink); }
+body.dex .slot small { display: block; font-size: 11px; color: var(--muted); }
+body.dex .slot b { font-size: 12px; }
+
+/* 흔한 정도 배지와 카드 테두리 색 */
+body.dex .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+body.dex .badge.common, body.dex .card.common { --tone: #9cc7a4; }
+body.dex .badge.uncommon, body.dex .card.uncommon { --tone: #8fb4e8; }
+body.dex .badge.rare, body.dex .card.rare { --tone: #e8a0d0; }
+body.dex .badge { background: var(--tone); }
+
+/* 품종 도감 */
+body.dex .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; }
+body.dex .card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 6px 4px 8px;
+  border: 2px solid var(--ink);
+  border-top: 6px solid var(--tone);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 12px;
+  text-align: center;
+}
+body.dex .card.locked { background: #ece3d6; color: #8a7b6c; }
+body.dex .card small { color: var(--muted); font-size: 11px; }
+
+/* 다 키운 기록 */
+body.dex .history .row { display: flex; align-items: center; gap: 10px; padding: 4px 0; border-bottom: 1px dashed var(--line); }
+body.dex .history .row b { display: block; font-size: 13px; }
+body.dex .history .row small { color: var(--muted); font-size: 12px; }
+
+/* 설정 */
+body.dex button.danger {
+  padding: 7px 14px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #ffd6d6;
+  color: #8a1f2a;
+  font: bold 13px 'Malgun Gothic', sans-serif;
+  cursor: pointer;
+}
+body.dex button.danger:hover { background: #ffc0c0; }
+body.dex button.danger:disabled { opacity: 0.6; cursor: default; }

@@ -46,3 +46,8 @@ export function writeSave(data: SaveData): void {
         console.error('저장 실패:', e instanceof Error ? e.message : e)
     }
 }
+
+// 초기화하기 전에 지금 저장 파일을 따로 복사해 둔다. (실수로 눌러도 이 파일 이름을 save.json으로 바꾸면 되돌릴 수 있다)
+export function backupBeforeReset(): void {
+    copyFileSync(savePath(), join(app.getPath('userData'), 'save.before-reset.json'))
+}

@@ -1,12 +1,13 @@
 import {app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, shell, Tray} from 'electron'
 import {autoUpdater} from 'electron-updater'
+import {writeFile} from 'fs/promises'
 import {join} from 'path'
 import {INITIAL_CAT, coatName, grantGear, harvestIfReady, newCat, type CatState, type Completed} from '../shared/growth'
 import {EMPTY_SAVE, DEFAULT_SETTINGS, mergeSettings, type Settings} from '../shared/save'
 import {TOKENS_PER_XP, applyUsage, type UsageRecord} from '../shared/usage'
 import {RELEASES_API, isNewer, parseLatestRelease} from '../shared/version'
 import {defaultClaudeRoot, defaultCodexRoot, scanClaudeLogs, scanCodexLogs, type Offsets} from './claudeLogs'
-import {loadSave, writeSave} from './store'
+import {backupBeforeReset, loadSave, writeSave} from './store'
 import {trayIcon} from './trayIcon'
 
 const TEST_PROVIDER = 'test'
@@ -102,6 +103,20 @@ function openDex(): void {
     if (devUrl) void dexWin.loadURL(`${devUrl}#dex`)
     else void dexWin.loadFile(join(__dirname, '../renderer/index.html'), {hash: 'dex'})
     dexWin.on('closed', () => (dexWin = null))
+    // 개발 확인용: TOKENCAT_SHOT=폴더 로 실행하면 도감을 위/아래 두 장 PNG로 저장한다 (설치 앱에서는 무시)
+    const shot = !app.isPackaged && process.env.TOKENCAT_SHOT
+    if (shot) {
+        const w = dexWin
+        w.webContents.once('did-finish-load', () => setTimeout(async () => {
+            await writeFile(join(shot, 'dex-top.png'), (await w.webContents.capturePage()).toPNG())
+            await w.webContents.executeJavaScript('window.scrollTo(0, 650)')
+            await new Promise((r) => setTimeout(r, 300))
+            await writeFile(join(shot, 'dex-mid.png'), (await w.webContents.capturePage()).toPNG())
+            await w.webContents.executeJavaScript('window.scrollTo(0, document.body.scrollHeight)')
+            await new Promise((r) => setTimeout(r, 300))
+            await writeFile(join(shot, 'dex-end.png'), (await w.webContents.capturePage()).toPNG())
+        }, 2500))
+    }
 }
 
 // 사용 기록 반영의 유일한 입구. 실제 AI 연동부(adapter)도 이 함수로 기록을 넘긴다.
@@ -298,6 +313,36 @@ ipcMain.on('cat:testXp', (e, kind: unknown) => {
     if (kind === 'small' || kind === 'big') addTestXp(kind === 'big' ? 10 : 1)
 })
 ipcMain.on('dex:open', openDex)
+
+// 처음부터 다시 시작: 고양이, 도감, 방 가구를 지우고 새 아기 고양이로 시작한다. 설정과 로그 읽은 위치는 그대로 둔다.
+// 읽은 위치를 유지하므로 지금까지의 사용 기록이 다시 경험치가 되지 않는다. 지우기 전에 저장 파일을 백업한다.
+ipcMain.handle('data:reset', async (e): Promise<'reset' | 'canceled' | 'error'> => {
+    if (!dexWin || e.sender !== dexWin.webContents) return 'error'
+    try {
+        const {response} = await dialog.showMessageBox(dexWin, {
+            type: 'warning',
+            title: '처음부터 다시 시작',
+            message: '처음부터 다시 시작할까요?',
+            detail: '지금 키우는 고양이, 도감, 방 가구가 모두 지워지고 새 아기 고양이부터 시작해요. 지금 데이터는 save.before-reset.json 파일로 백업해 둬요.',
+            buttons: ['초기화', '취소'],
+            defaultId: 1,
+            cancelId: 1
+        })
+        if (response !== 0) return 'canceled'
+        persist() // 백업에 최신 상태가 들어가도록 먼저 저장
+        backupBeforeReset()
+        cat = newCat()
+        collection = []
+        levelUps = 0
+        tray?.setImage(trayIcon(cat.coat))
+        persist()
+        send('state:changed', getState())
+        return 'reset'
+    } catch (err) {
+        console.error('초기화 실패:', err instanceof Error ? err.message : err)
+        return 'error'
+    }
+})
 ipcMain.on('cat:menu', (e) => {
     if (e.sender === win?.webContents) showMenu()
 })
