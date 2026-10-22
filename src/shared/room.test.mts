@@ -1,6 +1,6 @@
 // 실행: npm test
 import assert from 'node:assert/strict'
-import {FURNITURE, ROOM_W, TOWER_SHELVES, chooseFurniture, newlyUnlocked, plan, roomStep, startCat, unlockedAt, type RoomCat} from './room.ts'
+import {FURNITURE, ROOM_W, TOWER_SHELVES, WALLPAPERS, wallpaperAt, chooseFurniture, newlyUnlocked, plan, roomStep, startCat, unlockedAt, type RoomCat} from './room.ts'
 
 const seeded = (seed: number) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32)
 
@@ -43,5 +43,10 @@ for (let i = 0; i < 60 * 60 * 10; i++) {
 }
 for (const p of ['walk', 'leap', 'eat', 'sleep', 'stretch', 'sit', 'run', 'happy']) assert.ok(poses.has(p), p)
 assert.ok(spun, '캣휠이 돈 적이 있다')
+
+// 벽지: 키운 수에 따라 바뀐다
+assert.equal(wallpaperAt(0).id, 'cream')
+assert.equal(wallpaperAt(WALLPAPERS[1].cats).id, WALLPAPERS[1].id)
+assert.equal(wallpaperAt(999).id, WALLPAPERS[WALLPAPERS.length - 1].id)
 
 console.log('room: all checks passed')

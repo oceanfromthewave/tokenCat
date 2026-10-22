@@ -1,14 +1,15 @@
 import {app, BrowserWindow, dialog, ipcMain, Menu, net, Notification, powerMonitor, screen, shell, Tray} from 'electron'
 import {autoUpdater} from 'electron-updater'
-import {writeFile} from 'fs/promises'
+import {readFile, stat, writeFile} from 'fs/promises'
 import {join} from 'path'
-import {INITIAL_CAT, coatName, grantGear, harvestIfReady, newCat, type CatState, type Completed} from '../shared/growth'
-import {EMPTY_SAVE, DEFAULT_SETTINGS, mergeSettings, type Settings} from '../shared/save'
+import {INITIAL_CAT, callName, cleanName, grantGear, harvestIfReady, newCat, type CatState, type Completed} from '../shared/growth'
+import {EMPTY_SAVE, EMPTY_STATS, DEFAULT_SETTINGS, dateKey, mergeSettings, parseSave, recordXp, type Settings, type Stats} from '../shared/save'
 import {TOKENS_PER_XP, applyUsage, type UsageRecord} from '../shared/usage'
 import {RELEASES_API, isNewer, parseLatestRelease} from '../shared/version'
 import {defaultClaudeRoot, defaultCodexRoot, scanClaudeLogs, scanCodexLogs, type Offsets} from './claudeLogs'
 import {backupBeforeReset, loadSave, writeSave} from './store'
 import {trayIcon} from './trayIcon'
+import {watchFullscreen} from './fullscreen'
 
 const TEST_PROVIDER = 'test'
 const TEST_TOKENS = 30 * TOKENS_PER_XP // 테스트 1회당 30xp. 렌더러가 수치를 보내지 못하게 main에서 고정한다.
@@ -19,6 +20,9 @@ const POLL_MS = 30_000
 let cat: CatState = INITIAL_CAT
 let collection: Completed[] = [] // 다 키워서 도감에 올린 고양이
 let levelUps = 0 // 지금까지 오른 레벨 수 (방 가구)
+let stats: Stats = EMPTY_STATS // 쓰다듬은 횟수, 날짜별 경험치
+let userHidden = false // 트레이에서 고양이를 숨겼는지
+let fullscreenNow = false // 맨 앞 창이 전체화면인지
 let processed: string[] = []
 let logOffsets: Offsets | null = null
 let settings: Settings = DEFAULT_SETTINGS
@@ -28,12 +32,15 @@ let dexWin: BrowserWindow | null = null
 let askedVersion: string | null = null // 이번 실행에서 이미 물어본 버전 (같은 버전을 반복해서 묻지 않는다)
 
 function persist(): void {
-    writeSave({cat, collection, levelUps, processed, settings, logOffsets})
+    writeSave({cat, collection, levelUps, stats, processed, settings, logOffsets})
 }
 
-// 작업표시줄 바로 위, 주 모니터 작업 영역의 가로 전체. (작업표시줄이 어디에 있든 작업 영역 아래쪽을 따라간다)
+// 고양이가 걸을 모니터: 설정에서 고른 모니터, 없으면(뽑혔거나 고르지 않음) 주 모니터
+const catDisplay = (): Electron.Display => screen.getAllDisplays().find((d) => d.id === settings.displayId) ?? screen.getPrimaryDisplay()
+
+// 작업표시줄 바로 위, 그 모니터 작업 영역의 가로 전체. (작업표시줄이 어디에 있든 작업 영역 아래쪽을 따라간다)
 const stripBounds = (): Electron.Rectangle => {
-    const wa = screen.getPrimaryDisplay().workArea
+    const wa = catDisplay().workArea
     return {x: wa.x, y: wa.y + wa.height - WIN_H, width: wa.width, height: WIN_H}
 }
 
@@ -68,7 +75,15 @@ function fitToTaskbar(): void {
     if (b.x !== cur.x || b.y !== cur.y || b.width !== cur.width || b.height !== cur.height) win.setBounds(b)
 }
 
-const getState = (): { cat: CatState; collection: Completed[]; levelUps: number } => ({cat, collection, levelUps})
+const getState = (): { cat: CatState; collection: Completed[]; levelUps: number; stats: Stats; sound: boolean } => ({cat, collection, levelUps, stats, sound: settings.sound})
+
+// 고양이를 보일지: 트레이에서 숨기지 않았고, (설정이 켜져 있으면) 전체화면 앱이 없을 때
+function applyVisibility(): void {
+    if (!win || win.isDestroyed()) return
+    const show = !userHidden && !(settings.hideFullscreen && fullscreenNow)
+    if (show && !win.isVisible()) win.showInactive()
+    else if (!show && win.isVisible()) win.hide()
+}
 const send = (channel: string, payload: unknown): void => {
     for (const w of BrowserWindow.getAllWindows()) w.webContents.send(channel, payload)
 }
@@ -82,7 +97,7 @@ function settle(): boolean {
     cat = r.cat
     collection = r.collection
     tray?.setImage(trayIcon(cat.coat))
-    if (Notification.isSupported()) new Notification({title: '고양이가 다 컸어요!', body: `${coatName(before.coat)}이(가) 도감에 올라갔어요. 새 고양이가 왔어요.`}).show()
+    if (Notification.isSupported()) new Notification({title: '고양이가 다 컸어요!', body: `${callName(before)}이(가) 도감에 올라갔어요. 새 고양이가 왔어요.`}).show()
     return true
 }
 
@@ -124,6 +139,8 @@ function ingestUsage(records: UsageRecord[]): void {
     const result = applyUsage(cat, processed, records)
     const changed = result.processed !== processed
     levelUps += Math.max(0, result.cat.level - cat.level)
+    // 날짜별 기록에는 실제 사용량만 (테스트 경험치는 빼고)
+    if (records.some((r) => r.provider !== TEST_PROVIDER)) stats = recordXp(stats, result.gainedXp, dateKey(new Date()))
     cat = result.cat
     processed = result.processed
     const harvested = settle()
@@ -245,15 +262,32 @@ async function checkForUpdate(manual: boolean): Promise<void> {
 
 function showMenu(): void {
     if (!win) return
-    const toggle = (key: 'claude' | 'codex' | 'updateCheck') => (item: Electron.MenuItem): void => {
+    const toggle = (key: 'claude' | 'codex' | 'updateCheck' | 'sound' | 'hideFullscreen') => (item: Electron.MenuItem): void => {
         settings = mergeSettings(settings, {[key]: item.checked})
         persist()
+        applyVisibility()
+        send('state:changed', getState())
     }
+    const primary = screen.getPrimaryDisplay().id
+    const displays = screen.getAllDisplays().map((d, i): Electron.MenuItemConstructorOptions => ({
+        label: `모니터 ${i + 1} (${d.size.width}x${d.size.height})${d.id === primary ? ' · 주 모니터' : ''}`,
+        type: 'radio',
+        checked: catDisplay().id === d.id,
+        click: () => {
+            settings = mergeSettings(settings, {displayId: d.id === primary ? null : d.id})
+            persist()
+            fitToTaskbar()
+        }
+    }))
     Menu.buildFromTemplate([
         {label: 'Claude Code 기록 읽기', type: 'checkbox', checked: settings.claude, click: toggle('claude')},
         {label: 'Codex 기록 읽기', type: 'checkbox', checked: settings.codex, click: toggle('codex')},
         {type: 'separator'},
         {label: '도감 열기', click: openDex},
+        {type: 'separator'},
+        {label: '쓰다듬으면 야옹 소리', type: 'checkbox', checked: settings.sound, click: toggle('sound')},
+        {label: '전체화면일 때 숨기기', type: 'checkbox', checked: settings.hideFullscreen, click: toggle('hideFullscreen')},
+        ...(displays.length > 1 ? [{label: '고양이가 걸을 모니터', submenu: displays}] : []),
         {type: 'separator'},
         {label: '업데이트 확인', click: () => void checkForUpdate(true)},
         {label: '새 버전 자동 확인', type: 'checkbox', checked: settings.updateCheck, click: toggle('updateCheck')},
@@ -286,13 +320,12 @@ function createTray(): void {
     tray = new Tray(trayIcon(cat.coat))
     tray.setToolTip('Token Cat')
     const toggle = (): void => {
-        if (!win) return
-        if (win.isVisible()) win.hide()
-        else win.showInactive()
+        userHidden = !userHidden
+        applyVisibility()
     }
     tray.on('click', toggle)
     tray.on('right-click', () => tray?.popUpContextMenu(Menu.buildFromTemplate([
-        {label: win?.isVisible() ? '고양이 숨기기' : '고양이 보이기', click: toggle},
+        {label: userHidden ? '고양이 보이기' : '고양이 숨기기', click: toggle},
         {label: '도감 열기', click: openDex},
         {label: '업데이트 확인', click: () => void checkForUpdate(true)},
         {type: 'separator'},
@@ -314,6 +347,87 @@ ipcMain.on('cat:testXp', (e, kind: unknown) => {
 })
 ipcMain.on('dex:open', openDex)
 
+// 쓰다듬기(클릭) 횟수. 작업표시줄 고양이 창에서 온 것만 센다.
+ipcMain.on('cat:pet', (e) => {
+    if (e.sender !== win?.webContents) return
+    stats = {...stats, pets: stats.pets + 1}
+    persist()
+    send('state:changed', getState())
+})
+
+// 이름 짓기 (도감 창에서만). 비우면 이름을 지운다.
+ipcMain.handle('cat:setName', (e, value: unknown) => {
+    if (!dexWin || e.sender !== dexWin.webContents) return getState()
+    const name = cleanName(value)
+    const {name: _old, ...rest} = cat
+    cat = name ? {...rest, name} : rest
+    persist()
+    send('state:changed', getState())
+    return getState()
+})
+
+// 내보내기/불러오기: 고양이, 도감, 방, 기록, 설정을 파일 하나로. 위치는 사용자가 저장/열기 창에서 고른다.
+// 불러오기는 이 PC의 로그 읽은 위치와 처리한 기록은 그대로 둬서, 같은 사용 기록이 다시 경험치가 되지 않는다.
+const MAX_IMPORT_BYTES = 2 * 1024 * 1024
+type DataResult = 'saved' | 'loaded' | 'canceled' | 'error'
+
+ipcMain.handle('data:export', async (e): Promise<DataResult> => {
+    if (!dexWin || e.sender !== dexWin.webContents) return 'error'
+    try {
+        const {canceled, filePath} = await dialog.showSaveDialog(dexWin, {
+            title: '데이터 내보내기',
+            defaultPath: join(app.getPath('documents'), `TokenCat-backup-${dateKey(new Date())}.json`),
+            filters: [{name: 'JSON', extensions: ['json']}]
+        })
+        if (canceled || !filePath) return 'canceled'
+        const data = {app: 'tokencat', format: 1, exportedAt: new Date().toISOString(), cat, collection, levelUps, stats, settings}
+        await writeFile(filePath.toLowerCase().endsWith('.json') ? filePath : filePath + '.json', JSON.stringify(data, null, 1))
+        return 'saved'
+    } catch (err) {
+        console.error('내보내기 실패:', err instanceof Error ? err.message : err)
+        return 'error'
+    }
+})
+
+ipcMain.handle('data:import', async (e): Promise<DataResult> => {
+    if (!dexWin || e.sender !== dexWin.webContents) return 'error'
+    try {
+        const {canceled, filePaths} = await dialog.showOpenDialog(dexWin, {title: '데이터 불러오기', properties: ['openFile'], filters: [{name: 'JSON', extensions: ['json']}]})
+        if (canceled || !filePaths[0]) return 'canceled'
+        if ((await stat(filePaths[0])).size > MAX_IMPORT_BYTES) return 'error'
+        const raw = JSON.parse(await readFile(filePaths[0], 'utf8'))
+        if (raw?.app !== 'tokencat') return 'error'
+        // 저장 파일과 같은 검증을 거친다. 이 PC의 처리 기록/읽은 위치는 넣지 않는다.
+        const data = parseSave(JSON.stringify({...raw, processed: [], logOffsets: null}))
+        if (data === EMPTY_SAVE) return 'error'
+        const {response} = await dialog.showMessageBox(dexWin, {
+            type: 'warning',
+            title: '데이터 불러오기',
+            message: '지금 데이터를 불러온 데이터로 바꿀까요?',
+            detail: '지금 키우는 고양이, 도감, 방, 기록, 설정이 모두 바뀌어요. 필요하면 먼저 내보내기를 해 두세요.',
+            buttons: ['바꾸기', '취소'],
+            defaultId: 1,
+            cancelId: 1
+        })
+        if (response !== 0) return 'canceled'
+        cat = data.cat
+        collection = data.collection
+        levelUps = data.levelUps
+        stats = data.stats
+        settings = data.settings
+        settle()
+        tray?.setImage(trayIcon(cat.coat))
+        persist()
+        fitToTaskbar()
+        applyVisibility()
+        send('state:changed', getState())
+        return 'loaded'
+    } catch (err) {
+        console.error('불러오기 실패:', err instanceof Error ? err.message : err)
+        return 'error'
+    }
+})
+
 // 처음부터 다시 시작: 고양이, 도감, 방 가구를 지우고 새 아기 고양이로 시작한다. 설정과 로그 읽은 위치는 그대로 둔다.
 // 읽은 위치를 유지하므로 지금까지의 사용 기록이 다시 경험치가 되지 않는다. 지우기 전에 저장 파일을 백업한다.
 ipcMain.handle('data:reset', async (e): Promise<'reset' | 'canceled' | 'error'> => {
@@ -334,6 +448,7 @@ ipcMain.handle('data:reset', async (e): Promise<'reset' | 'canceled' | 'error'> 
         cat = newCat()
         collection = []
         levelUps = 0
+        stats = EMPTY_STATS
         tray?.setImage(trayIcon(cat.coat))
         persist()
         send('state:changed', getState())
@@ -359,6 +474,7 @@ if (!app.requestSingleInstanceLock()) {
         logOffsets = save.logOffsets
         collection = save.collection
         levelUps = save.levelUps
+        stats = save.stats
         settle() // 저장된 레벨에 맞는 소품을 주고, 이미 다 컸으면 도감에 올린다
         createWindow()
         createTray()
@@ -367,6 +483,11 @@ if (!app.requestSingleInstanceLock()) {
         screen.on('display-removed', fitToTaskbar)
         screen.on('display-metrics-changed', fitToTaskbar)
         setInterval(fitToTaskbar, 3000) // 작업표시줄을 옮기거나 자동 숨김을 바꾼 경우를 놓치지 않게
+        const watcher = watchFullscreen((full) => {
+            fullscreenNow = full
+            applyVisibility()
+        })
+        app.on('will-quit', () => watcher?.kill())
         pollLogs()
         setInterval(pollLogs, POLL_MS)
         setTimeout(() => void checkForUpdate(false), 15_000) // 시작 직후에는 고양이가 자리 잡도록 잠깐 기다린다

@@ -1,5 +1,5 @@
 import {LEAP_SECONDS, force, start, step, type Behavior, type Mood} from '../../shared/behavior'
-import {HARVEST_LEVEL, INITIAL_CAT, SLOTS, coatName, formatXp, gearName, stageOf, xpToNextLevel, type CatState} from '../../shared/growth'
+import {HARVEST_LEVEL, INITIAL_CAT, SLOTS, callName, coatName, formatXp, gearName, stageOf, xpToNextLevel, type CatState} from '../../shared/growth'
 import {GRID_H, GRID_W, POSE_FPS as FPS} from '../../shared/sprites'
 import type {AppState} from '../../preload/index'
 import {spriteFor, type Sprite} from './draw'
@@ -23,6 +23,43 @@ canvas.style.width = `${GRID_W * P}px`
 canvas.style.height = `${GRID_H * P}px`
 
 let cat: CatState = INITIAL_CAT
+let sound = true // 쓰다듬으면 야옹 소리
+const FRAME_MS = 1000 / 30 // 초당 30번만 그린다 (60번은 눈에 띄는 차이 없이 CPU만 더 쓴다)
+
+// 말풍선은 HTML로 그리므로 사용자가 지은 이름은 반드시 글자로만 넣는다
+const esc = (t: string): string => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
+
+// 밤(23시~6시)에는 더 자주 존다
+const isNight = (): boolean => {
+    const h = new Date().getHours()
+    return h >= 23 || h < 6
+}
+
+// "야옹": 파일 없이 소리를 합성한다. 음 높이가 올라갔다 내려오는 짧은 소리.
+let audio: AudioContext | null = null
+function meow(): void {
+    try {
+        audio ??= new AudioContext()
+        const t = audio.currentTime
+        const osc = audio.createOscillator(), gain = audio.createGain(), filter = audio.createBiquadFilter()
+        osc.type = 'sawtooth'
+        osc.frequency.setValueAtTime(480, t)
+        osc.frequency.linearRampToValueAtTime(820, t + 0.12)
+        osc.frequency.linearRampToValueAtTime(520, t + 0.4)
+        filter.type = 'lowpass'
+        filter.frequency.setValueAtTime(1400, t)
+        filter.Q.value = 6
+        gain.gain.setValueAtTime(0, t)
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.04)
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.25)
+        gain.gain.linearRampToValueAtTime(0, t + 0.42)
+        osc.connect(filter).connect(gain).connect(audio.destination)
+        osc.start(t)
+        osc.stop(t + 0.45)
+    } catch {
+        // 소리를 못 내도 고양이는 그대로 동작한다
+    }
+}
 let lastGainAt = 0
 const startedAt = performance.now()
 
@@ -39,6 +76,7 @@ let knownUps = 0 // 지금까지 오른 레벨 수
 function apply(next: AppState): void {
     const before = cat
     cat = next.cat
+    sound = next.sound
     if ((next.gainedXp ?? 0) > 0) lastGainAt = performance.now()
     const first = known < 0
     const grown = !first && next.collection.length > known
@@ -47,7 +85,7 @@ function apply(next: AppState): void {
     knownUps = next.levelUps
     if (first) return
     if (grown) {
-        showSay(`다 컸어요! ${coatName(before.coat)}은(는) 도감에 올라갔어요. 새 고양이가 왔어요`, 7000)
+        showSay(`다 컸어요! ${esc(callName(before))}은(는) 도감에 올라갔어요. 새 고양이가 왔어요`, 7000)
         return
     }
     const got = SLOTS.find((slot) => cat.gear[slot] && !before.gear[slot])
@@ -107,6 +145,8 @@ document.addEventListener('mousedown', (e) => {
     }
     b = force(b, 'happy', Math.random) // 쓰다듬으면 웃으면서 하트
     hearts()
+    window.api.pet()
+    if (sound) meow()
 })
 document.addEventListener('contextmenu', (e) => {
     e.preventDefault()
@@ -115,7 +155,8 @@ document.addEventListener('contextmenu', (e) => {
 
 function statusText(): string {
     const need = xpToNextLevel(cat.level)
-    return `${coatName(cat.coat)} · ${stageOf(cat.level).name} · Lv.${cat.level}<div class="bar"><i style="width:${Math.min(100, (cat.xp / need) * 100)}%"></i></div>${formatXp(cat.xp)} / ${need} · Lv.${HARVEST_LEVEL}에 다 커요`
+    const title = cat.name ? `<b>${esc(cat.name)}</b> · ${coatName(cat.coat)}` : coatName(cat.coat)
+    return `${title} · ${stageOf(cat.level).name} · Lv.${cat.level}<div class="bar"><i style="width:${Math.min(100, (cat.xp / need) * 100)}%"></i></div>${formatXp(cat.xp)} / ${need} · Lv.${HARVEST_LEVEL}에 다 커요`
 }
 
 // ---- 한 프레임 ----
@@ -123,12 +164,16 @@ let prev = performance.now()
 let lastImage: HTMLCanvasElement | null = null
 
 function frame(now: number): void {
+    if (now - prev < FRAME_MS - 1) {
+        requestAnimationFrame(frame)
+        return
+    }
     const dt = Math.min((now - prev) / 1000, 0.1) // 절전 복귀 등으로 시간이 튀어도 한 번에 멀리 가지 않게
     prev = now
     const stage = stageOf(cat.level)
     const mood: Mood = {
         excited: now - lastGainAt < EXCITED_MS && lastGainAt > 0,
-        sleepy: now - Math.max(lastGainAt, startedAt) > SLEEPY_MS,
+        sleepy: isNight() || now - Math.max(lastGainAt, startedAt) > SLEEPY_MS,
         pace: stage.pace
     }
     const bounds = {min: -EDGE * P, max: window.innerWidth - (GRID_W - EDGE) * P}

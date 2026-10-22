@@ -44,6 +44,17 @@ export const isCoatId = (v: unknown): v is CoatId => COATS.some((c) => c.id === 
 
 export const coatName = (id: CoatId): string => COATS.find((c) => c.id === id)?.name ?? id
 
+// 이름: 앞뒤 공백을 없애고 16자까지. 비우면 이름 없음.
+export const NAME_MAX = 16
+export const cleanName = (v: unknown): string | undefined => {
+    if (typeof v !== 'string') return undefined
+    const n = [...v.trim()].slice(0, NAME_MAX).join('')
+    return n || undefined
+}
+
+// 부를 이름: 지어 준 이름, 없으면 품종 이름
+export const callName = (c: { coat: CoatId; name?: string }): string => c.name ?? coatName(c.coat)
+
 // 흔한 정도 (도감 표시용): 가중치 5 이상 흔함, 3~4 드묾, 그 아래 희귀
 export type Rarity = 'common' | 'uncommon' | 'rare'
 export const RARITY_NAME: Record<Rarity, string> = {common: '흔함', uncommon: '드묾', rare: '희귀'}
@@ -89,6 +100,7 @@ export interface CatState {
     xp: number // 현재 레벨에서 쌓인 경험치 (소수로 쌓인다)
     coat: CoatId
     gear: Gear
+    name?: string // 사용자가 지어 준 이름 (없으면 품종 이름으로 부른다)
 }
 
 export const INITIAL_CAT: CatState = {level: 1, xp: 0, coat: 'orange', gear: {}}
@@ -119,6 +131,7 @@ export function grantGear(cat: CatState, rand: () => number = Math.random): CatS
 export interface Completed {
     coat: CoatId
     gear: Gear
+    name?: string
     completedAt: string // ISO 시각
 }
 
@@ -128,7 +141,7 @@ export const HARVEST_LEVEL = 12
 // ponytail: 다 크는 순간 넘친 경험치는 버린다. 한 번에 수천 xp가 들어오는 일은 드물어서 이월은 생략.
 export function harvestIfReady(cat: CatState, collection: Completed[], now: string, rand: () => number = Math.random): { cat: CatState; collection: Completed[] } {
     if (cat.level < HARVEST_LEVEL) return {cat, collection}
-    return {cat: newCat(rand), collection: [...collection, {coat: cat.coat, gear: cat.gear, completedAt: now}]}
+    return {cat: newCat(rand), collection: [...collection, {coat: cat.coat, gear: cat.gear, completedAt: now, ...(cat.name ? {name: cat.name} : {})}]}
 }
 
 // 화면 표시용. 소수 첫째 자리까지 버림. (경험치는 소수로 쌓이므로 정수만 보이면 오르는 게 안 보인다)

@@ -2,11 +2,11 @@
 // 화면(DOM)을 모르는 순수 규칙이다. 단위는 방 도트 칸, 시간은 초.
 import type {Pose} from './sprites.ts'
 
-export const ROOM_W = 260
+export const ROOM_W = 320
 export const ROOM_H = 100
 export const FLOOR = 86 // 바닥 줄 (고양이 발바닥이 닿는 높이)
 
-export type FurnId = 'bowl' | 'bed' | 'window' | 'scratcher' | 'yarn' | 'plant' | 'tower' | 'rug' | 'wheel'
+export type FurnId = 'bowl' | 'bed' | 'window' | 'scratcher' | 'yarn' | 'plant' | 'tower' | 'rug' | 'wheel' | 'fishbowl' | 'house' | 'frame'
 
 export interface Furniture {
     id: FurnId
@@ -27,7 +27,10 @@ export const FURNITURE: Furniture[] = [
     {id: 'tower', name: '캣타워', unlock: {levels: 9}, x: 168},
     // 특별 가구: 고양이를 다 키운 수만큼
     {id: 'rug', name: '러그', unlock: {cats: 1}, x: 60},
-    {id: 'wheel', name: '캣휠', unlock: {cats: 2}, x: 226}
+    {id: 'wheel', name: '캣휠', unlock: {cats: 2}, x: 286},
+    {id: 'fishbowl', name: '어항', unlock: {cats: 3}, x: 206},
+    {id: 'house', name: '숨숨집', unlock: {cats: 4}, x: 236},
+    {id: 'frame', name: '고양이 액자', unlock: {cats: 5}, x: 236}
 ]
 
 export const TOWER_SHELVES = [30, 54] // 캣타워 선반 높이 (바닥에서 위로)
@@ -41,6 +44,16 @@ export interface Progress {
 
 const isOpen = (f: Furniture, p: Progress): boolean => ('levels' in f.unlock ? p.levels >= f.unlock.levels : p.cats >= f.unlock.cats)
 export const unlockedAt = (p: Progress): Furniture[] => FURNITURE.filter((f) => isOpen(f, p))
+
+// 벽지: 고양이를 많이 키울수록 바뀐다 (마지막으로 열린 것을 쓴다)
+export const WALLPAPERS = [
+    {id: 'cream', name: '크림 벽지', cats: 0},
+    {id: 'mint', name: '민트 벽지', cats: 6},
+    {id: 'lavender', name: '라벤더 벽지', cats: 8},
+    {id: 'night', name: '밤하늘 벽지', cats: 10}
+] as const
+export type WallpaperId = (typeof WALLPAPERS)[number]['id']
+export const wallpaperAt = (cats: number): (typeof WALLPAPERS)[number] => WALLPAPERS.findLast((w) => cats >= w.cats) ?? WALLPAPERS[0]
 
 // 방 고양이가 할 일 한 단계
 export type Step =
@@ -90,20 +103,24 @@ export function plan(f: Furniture | null, rand: Rand): Step[] {
         }
         case 'wheel': // 바퀴 안으로 뛰어들어 달리면 바퀴가 돈다
             return [{kind: 'walk', x: f.x - WHEEL_R - 8}, {kind: 'jump', x: f.x, y: 3}, {kind: 'pose', pose: 'run', secs: secs(5, 9), dir: 1, spin: true}, {kind: 'jump', x: f.x - WHEEL_R - 10, y: 0}]
-        default: // 창문, 화분, 러그는 보기만 하는 가구
+        case 'fishbowl': // 어항 앞에 앉아 물고기를 구경한다
+            return [{kind: 'walk', x: f.x - 16}, {kind: 'pose', pose: 'sit', secs: secs(4, 8), dir: 1}, {kind: 'pose', pose: 'happy', secs: 2}]
+        case 'house': // 숨숨집 입구 앞에서 몸을 말고 잔다
+            return [{kind: 'walk', x: f.x - 2}, {kind: 'pose', pose: 'sleep', secs: secs(10, 18), dir: -1}]
+        default: // 창문, 화분, 러그, 액자는 보기만 하는 가구
             return plan(null, rand)
     }
 }
 
 // 쓸 수 있는 가구 중 하나를 고른다. 가끔은 그냥 돌아다닌다.
 export function chooseFurniture(list: Furniture[], rand: Rand): Furniture | null {
-    const usable = list.filter((f) => !['window', 'plant', 'rug'].includes(f.id))
+    const usable = list.filter((f) => !['window', 'plant', 'rug', 'frame'].includes(f.id))
     if (!usable.length || rand() < 0.25) return null
     return pick(usable, rand)
 }
 
 export function startCat(): RoomCat {
-    return {x: 90, y: 0, dir: 1, pose: 'sit', t: 0, steps: [{kind: 'pose', pose: 'sit', secs: 1.5}], from: {x: 90, y: 0}, spin: false}
+    return {x: 120, y: 0, dir: 1, pose: 'sit', t: 0, steps: [{kind: 'pose', pose: 'sit', secs: 1.5}], from: {x: 120, y: 0}, spin: false}
 }
 
 // dt초만큼 시간을 보낸다. 할 일이 끝나면 다음 가구를 골라 새 계획을 세운다.

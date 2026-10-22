@@ -13,6 +13,9 @@ AI 사용 기록(토큰 숫자)을 경험치로 바꿔 작업표시줄 위를 �
 - `src/main/index.ts`: 고양이 상태의 단일 출처(`ingestUsage` 하나로만 상태 변경). 창은 주 모니터 작업 영역 아래쪽 가로 전체의 투명 띠 하나(`WIN_H`). 평소 `setIgnoreMouseEvents(true,{forward:true})`로 클릭이 통과하고, 렌더러가 고양이 위에 마우스가 올라갔다고 알릴 때만(`cat:capture`) 클릭을 받는다.
 - `src/shared/room.ts`: 도감 속 고양이 방. 기본 가구는 레벨업 수(`levelUps`, 고양이가 바뀌어도 누적), 특별 가구는 다 키운 수로 열린다. 방 고양이 행동 계획(`plan`/`roomStep`).
 - `src/renderer/src/`: React 없이 DOM+canvas. `main.ts`가 해시로 `overlay.ts`(작업표시줄) / `dex.ts`(도감, `#dex`)를 고른다. `room.ts`는 방 그림, `draw.ts`는 고양이 그림 캐시.
+- `src/main/fullscreen.ts`: 맨 앞 창이 모니터를 다 덮는지(전체화면) PowerShell 하나를 계속 띄워 1.5초마다 확인한다(창 위치와 클래스 이름만 본다). 설정이 켜져 있으면 고양이를 숨긴다.
+- 저장 파일: 고양이(이름 포함), 도감, `levelUps`, `stats`(쓰다듬은 횟수, 날짜별 경험치 60일, 실제 사용량만), 설정(소리, 전체화면 숨김, 모니터). 내보내기 파일은 `app: tokencat`이고 불러올 때 같은 검증(parseSave)을 거친다. 이 PC의 처리 기록/읽은 위치는 옮기지 않는다.
+- 말풍선은 innerHTML이라 사용자 이름은 반드시 `esc()`로 넣는다.
 - 개발 확인용(설치 앱에서는 무시): `TOKENCAT_DEX=1`이면 도감 창이 바로 열리고, `TOKENCAT_SHOT=폴더`면 도감을 위/중간/끝 PNG로 저장한다.
 
 ## 지킬 규칙 (tokenGrove와 동일)

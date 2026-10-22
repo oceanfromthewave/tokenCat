@@ -173,7 +173,7 @@ body.dex .room canvas {
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 260 / 100;
+  aspect-ratio: 320 / 100;
   image-rendering: pixelated;
   border: 2px solid var(--ink);
   border-radius: 8px;
@@ -244,3 +244,36 @@ body.dex button.danger {
 }
 body.dex button.danger:hover { background: #ffc0c0; }
 body.dex button.danger:disabled { opacity: 0.6; cursor: default; }
+
+/* 이름 짓기 */
+body.dex form.name { display: flex; gap: 6px; margin: 4px 0 8px; }
+body.dex form.name input {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #fff;
+  font: 13px 'Malgun Gothic', sans-serif;
+}
+
+body.dex button.plain {
+  padding: 6px 12px;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  background: #fff3e2;
+  color: var(--ink);
+  font: bold 13px 'Malgun Gothic', sans-serif;
+  cursor: pointer;
+}
+body.dex button.plain:hover { background: #ffe4c4; }
+body.dex .buttons { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+body.dex .settings button.danger { margin-top: 12px; }
+
+/* 최근 7일 그래프 */
+body.dex .chart { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; height: 130px; }
+body.dex .chart .col { display: flex; flex-direction: column; align-items: center; gap: 3px; min-width: 0; }
+body.dex .chart .bar { flex: 1; width: 70%; display: flex; align-items: flex-end; border-radius: 6px; background: #f0e2cf; overflow: hidden; }
+body.dex .chart .bar i { display: block; width: 100%; background: linear-gradient(#ffb36b, var(--accent)); }
+body.dex .chart small { color: var(--muted); font-size: 11px; white-space: nowrap; }
+body.dex .chart small.v { color: var(--ink); }

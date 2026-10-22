@@ -1,7 +1,7 @@
 // 도감 위쪽의 고양이 방 그림. 방 도트 한 칸 = 캔버스 1px, 화면에서는 2배로 키운다.
 // 가구는 작은 도트 판에 칠한 뒤 둘레에 짙은 윤곽선을 둘러서 고양이 그림과 같은 느낌을 낸다.
 import {stageOf, type CatState} from '../../shared/growth'
-import {FLOOR, ROOM_H, ROOM_W, TOWER_SHELVES, WHEEL_R, roomStep, startCat, unlockedAt, type FurnId, type Furniture, type RoomCat} from '../../shared/room'
+import {FLOOR, ROOM_H, ROOM_W, TOWER_SHELVES, WHEEL_R, roomStep, startCat, unlockedAt, wallpaperAt, type FurnId, type Furniture, type RoomCat, type WallpaperId} from '../../shared/room'
 import {FRAMES, POSE_FPS} from '../../shared/sprites'
 import {spriteFor} from './draw'
 
@@ -92,6 +92,22 @@ const DRAW: Record<FurnId, (a: Art, x: number) => void> = {
         a.rect(x - 8, FLOOR - high + 1, x + 16, FLOOR - high + 3, WOOD).rect(x - 8, FLOOR - high + 1, x + 16, FLOOR - high + 1, WOOD_L) // 위 선반
         a.line(x - 16, FLOOR - low + 4, x - 16, FLOOR - low + 9, '#e86a8f').ellipse(x - 16, FLOOR - low + 11, 1.5, 1.5, '#ff9bb5') // 매달린 공
     },
+    fishbowl: (a, x) => { // 작은 탁자 위의 둥근 어항과 금붕어
+        a.rect(x - 8, FLOOR - 14, x + 8, FLOOR - 12, WOOD).rect(x - 7, FLOOR - 11, x - 6, FLOOR, WOOD_D).rect(x + 6, FLOOR - 11, x + 7, FLOOR, WOOD_D)
+        a.ellipse(x, FLOOR - 20, 7, 6, '#bfe6ff').rect(x - 7, FLOOR - 27, x + 7, FLOOR - 24, '#e8f6ff').ellipse(x, FLOOR - 18, 6, 3, '#8fd0ff')
+        a.ellipse(x - 1, FLOOR - 19, 2, 1, '#ff8a3d').put(x + 2, FLOOR - 19, '#ff8a3d').put(x + 3, FLOOR - 20, '#ff8a3d').put(x + 3, FLOOR - 18, '#ff8a3d')
+        a.rect(x - 4, FLOOR - 28, x + 4, FLOOR - 28, '#d6eefc')
+    },
+    house: (a, x) => { // 지붕 달린 숨숨집, 둥근 입구
+        for (let i = 0; i < 9; i++) a.rect(x - 4 - i, FLOOR - 30 + i, x + 4 + i, FLOOR - 30 + i, i % 2 ? '#c96f4a' : '#b65f3e')
+        a.rect(x - 12, FLOOR - 21, x + 12, FLOOR, '#f2c9a0').rect(x - 12, FLOOR - 21, x + 12, FLOOR - 21, '#e6b48a')
+        a.ellipse(x, FLOOR - 6, 6, 7, '#5a3b2e').rect(x - 6, FLOOR - 6, x + 6, FLOOR, '#5a3b2e')
+    },
+    frame: (a, x) => { // 벽에 걸린 고양이 그림 액자
+        a.rect(x - 11, 14, x + 11, 34, '#c99a2e').rect(x - 9, 16, x + 9, 32, '#fff3d6')
+        a.ellipse(x, 27, 5, 4, '#ec9f4a').rect(x - 4, 19, x - 3, 22, '#ec9f4a').rect(x + 3, 19, x + 4, 22, '#ec9f4a').ellipse(x, 23, 4, 3, '#ec9f4a')
+        a.put(x - 2, 23, '#2a1f26').put(x + 2, 23, '#2a1f26').put(x, 24, '#f08fab')
+    },
     wheel: () => {} // 캣휠은 바퀴가 돌아야 해서 매 프레임 따로 그린다 (wheelArt)
 }
 
@@ -112,14 +128,23 @@ function wheelArt(x: number, angle: number): Art {
 }
 
 // 벽과 바닥, 그리고 움직이지 않는 가구 (가구 목록이 바뀔 때만 다시 그린다)
-function background(list: Furniture[]): HTMLCanvasElement {
+// 벽지 색 [바탕, 점무늬]
+const WALL: Record<WallpaperId, [string, string]> = {
+    cream: ['#f3e6d3', '#ead9c2'],
+    mint: ['#dff3ea', '#c9e8da'],
+    lavender: ['#ece4f7', '#ddd0f0'],
+    night: ['#3b4470', '#f5e9a8']
+}
+
+function background(list: Furniture[], wallpaper: WallpaperId): HTMLCanvasElement {
     const c = document.createElement('canvas')
     c.width = ROOM_W
     c.height = ROOM_H
     const ctx = c.getContext('2d')!
-    ctx.fillStyle = '#f3e6d3' // 벽
+    const [wall, dot] = WALL[wallpaper]
+    ctx.fillStyle = wall // 벽
     ctx.fillRect(0, 0, ROOM_W, ROOM_H)
-    ctx.fillStyle = '#ead9c2'
+    ctx.fillStyle = dot
     for (let y = 4; y < 70; y += 8) for (let x = (y / 8) % 2 ? 4 : 8; x < ROOM_W; x += 8) ctx.fillRect(x, y, 1, 1) // 벽지 점무늬
     ctx.fillStyle = '#d9a979' // 바닥
     ctx.fillRect(0, 72, ROOM_W, ROOM_H - 72)
@@ -130,7 +155,7 @@ function background(list: Furniture[]): HTMLCanvasElement {
     ctx.fillRect(0, 69, ROOM_W, 3)
     const art = new Art()
     // 러그 -> 벽 가구 -> 바닥 가구 순으로 겹친다
-    const order: FurnId[] = ['rug', 'window', 'plant', 'scratcher', 'tower', 'bed', 'bowl', 'yarn']
+    const order: FurnId[] = ['rug', 'window', 'frame', 'plant', 'scratcher', 'tower', 'house', 'fishbowl', 'bed', 'bowl', 'yarn']
     for (const id of order) {
         const f = list.find((it) => it.id === id)
         if (f) DRAW[id](art, f.x)
@@ -150,14 +175,19 @@ export function mountRoom(canvas: HTMLCanvasElement, getState: () => { cat: CatS
     let angle = 0
     let prev = performance.now()
     const frame = (now: number): void => {
+        if (now - prev < 1000 / 30 - 1) {
+            requestAnimationFrame(frame)
+            return
+        }
         const dt = Math.min((now - prev) / 1000, 0.1)
         prev = now
         const {cat, levelUps, cats} = getState()
         const list = unlockedAt({levels: levelUps, cats})
-        const key = list.map((f) => f.id).join()
+        const wallpaper = wallpaperAt(cats).id
+        const key = list.map((f) => f.id).join() + wallpaper
         if (key !== bgKey) {
             bgKey = key
-            bg = background(list)
+            bg = background(list, wallpaper)
         }
         rc = roomStep(rc, dt, list, Math.random)
         ctx.clearRect(0, 0, ROOM_W, ROOM_H)

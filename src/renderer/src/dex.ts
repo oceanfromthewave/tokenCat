@@ -1,7 +1,8 @@
 // 도감 화면: 고양이 방, 지금 키우는 고양이, 품종 도감(흔한 정도별), 다 키운 기록, 초기화.
-import {COATS, GEAR_LEVEL, HARVEST_LEVEL, RARITY_NAME, SLOTS, STAGES, coatName, formatXp, gearName, rarityOf, stageOf, xpToNextLevel, type CatState, type Completed, type Gear, type Rarity, type Slot} from '../../shared/growth'
+import {COATS, GEAR_LEVEL, HARVEST_LEVEL, NAME_MAX, RARITY_NAME, SLOTS, STAGES, callName, coatName, formatXp, gearName, rarityOf, stageOf, xpToNextLevel, type CatState, type Completed, type Gear, type Rarity, type Slot} from '../../shared/growth'
 import {GRID_H, GRID_W} from '../../shared/sprites'
-import {FURNITURE, unlockedAt} from '../../shared/room'
+import {FURNITURE, WALLPAPERS, unlockedAt, wallpaperAt} from '../../shared/room'
+import {dateKey, type Stats} from '../../shared/save'
 import type {AppState} from '../../preload/index'
 import {spriteFor} from './draw'
 import {mountRoom} from './room'
@@ -52,7 +53,8 @@ const banner = el('header', 'banner')
 const roomBox = el('section', 'panel room')
 const roomCanvas = el('canvas')
 const furnitureList = el('div', 'furniture')
-roomBox.append(el('h2', '', '고양이 방'), roomCanvas, furnitureList)
+const wallNote = el('p', 'muted')
+roomBox.append(el('h2', '', '고양이 방'), roomCanvas, furnitureList, wallNote)
 const content = el('div')
 const settingsBox = el('section', 'panel settings')
 const resetNote = el('p', 'muted')
@@ -63,22 +65,40 @@ resetBtn.addEventListener('click', async () => {
     resetBtn.disabled = false
     resetNote.textContent = r === 'reset' ? '새 아기 고양이와 다시 시작했어요. 예전 데이터는 save.before-reset.json에 백업했어요.' : r === 'error' ? '초기화하지 못했어요.' : ''
 })
+const dataNote = el('p', 'muted')
+const exportBtn = el('button', 'plain', '데이터 내보내기')
+const importBtn = el('button', 'plain', '데이터 불러오기')
+exportBtn.addEventListener('click', async () => {
+    const r = await window.api.exportData()
+    dataNote.textContent = r === 'saved' ? '파일로 저장했어요.' : r === 'error' ? '저장하지 못했어요.' : ''
+})
+importBtn.addEventListener('click', async () => {
+    const r = await window.api.importData()
+    dataNote.textContent = r === 'loaded' ? '불러왔어요.' : r === 'error' ? 'Token Cat에서 내보낸 파일이 아니거나 손상된 파일이에요.' : ''
+})
+const dataRow = el('div', 'buttons')
+dataRow.append(exportBtn, importBtn)
 settingsBox.append(
     el('h2', '', '설정'),
+    el('p', 'muted', '다른 PC로 옮길 때: 내보낸 파일을 그 PC에서 불러오면 고양이, 도감, 방, 기록이 그대로 와요.'),
+    dataRow,
+    dataNote,
     el('p', 'muted', '고양이, 도감, 방 가구를 모두 지우고 새로 시작해요. 지금까지 쓴 토큰은 다시 경험치가 되지 않아요.'),
     resetBtn,
     resetNote
 )
 document.body.append(banner, roomBox, content, settingsBox)
 
-function renderBanner({cat, collection, levelUps}: AppState): void {
+function renderBanner({cat, collection, levelUps, stats}: AppState): void {
     const found = new Set(collection.map((c) => c.coat)).size
     const chips = el('div', 'chips')
     for (const [label, value] of [
         ['찾은 품종', `${found} / ${COATS.length}`],
         ['다 키운 고양이', `${collection.length}마리`],
         ['방 가구', `${unlockedAt({levels: levelUps, cats: collection.length}).length} / ${FURNITURE.length}`],
-        ['지금', `${stageOf(cat.level).name} Lv.${cat.level}`]
+        ['지금', `${stageOf(cat.level).name} Lv.${cat.level}`],
+        ['쓰다듬은 횟수', `${stats.pets}번`],
+        ['오늘 얻은 경험치', formatXp(stats.daily[dateKey(new Date())] ?? 0)]
     ]) {
         const chip = el('div', 'chip')
         chip.append(el('small', '', label), el('b', '', value))
@@ -89,6 +109,9 @@ function renderBanner({cat, collection, levelUps}: AppState): void {
 
 function renderFurniture(levelUps: number, cats: number): void {
     const has = unlockedAt({levels: levelUps, cats})
+    const wall = wallpaperAt(cats)
+    const nextWall = WALLPAPERS.find((w) => w.cats > cats)
+    wallNote.textContent = `지금 벽지: ${wall.name}${nextWall ? ` · 다음 벽지: ${nextWall.name} (고양이 ${nextWall.cats - cats}마리 더 키우면)` : ''}`
     furnitureList.replaceChildren(...FURNITURE.map((f) => {
         const open = has.includes(f)
         const need = 'levels' in f.unlock ? `레벨업 ${f.unlock.levels}번` : `${f.unlock.cats}마리 키우기`
@@ -96,6 +119,48 @@ function renderFurniture(levelUps: number, cats: number): void {
         item.append(el('b', '', open ? f.name : '???'), el('small', '', open ? '있어요' : need))
         return item
     }))
+}
+
+// 이름 짓기: 입력하고 Enter 또는 [저장]. 비우고 저장하면 이름을 지운다.
+function nameForm(cat: CatState): HTMLElement {
+    const form = el('form', 'name')
+    const input = el('input')
+    input.maxLength = NAME_MAX
+    input.placeholder = '이름 짓기'
+    input.value = cat.name ?? ''
+    form.append(input, el('button', 'plain', '저장'))
+    form.addEventListener('submit', (e) => {
+        e.preventDefault()
+        input.blur() // 입력을 마쳤으니 저장 후 화면을 다시 그리게 한다
+        void window.api.setName(input.value)
+    })
+    return form
+}
+
+// 최근 7일 경험치 막대그래프
+function renderWeek(stats: Stats): HTMLElement {
+    const box = el('section', 'panel week')
+    box.append(el('h2', '', '최근 7일 경험치'))
+    const days = Array.from({length: 7}, (_, i) => {
+        const d = new Date()
+        d.setDate(d.getDate() - (6 - i))
+        return {key: dateKey(d), label: i === 6 ? '오늘' : `${d.getMonth() + 1}/${d.getDate()}`}
+    })
+    const max = Math.max(1, ...days.map((d) => stats.daily[d.key] ?? 0))
+    const chart = el('div', 'chart')
+    for (const d of days) {
+        const xp = stats.daily[d.key] ?? 0
+        const col = el('div', 'col')
+        const fill = el('i')
+        fill.style.height = `${(xp / max) * 100}%`
+        const track = el('div', 'bar')
+        track.append(fill)
+        col.append(el('small', 'v', formatXp(xp)), track, el('small', '', d.label))
+        chart.append(col)
+    }
+    const total = days.reduce((n, d) => n + (stats.daily[d.key] ?? 0), 0)
+    box.append(chart, el('p', 'muted', `7일 합계 ${formatXp(total)} · 하루 평균 ${formatXp(total / 7)} (실제 AI 사용량만, 테스트 경험치는 빼고)`))
+    return box
 }
 
 function renderNow(cat: CatState): HTMLElement {
@@ -106,7 +171,9 @@ function renderNow(cat: CatState): HTMLElement {
     const info = el('div', 'info')
     info.append(
         el('span', `badge ${rarityOf(cat.coat)}`, RARITY_NAME[rarityOf(cat.coat)]),
-        el('h3', '', coatName(cat.coat)),
+        el('h3', '', callName(cat)),
+        ...(cat.name ? [el('p', 'muted', coatName(cat.coat))] : []),
+        nameForm(cat),
         el('p', '', `${stageOf(cat.level).name} · Lv.${cat.level}`),
         bar(cat.xp / need, `다음 레벨까지 ${formatXp(cat.xp)} / ${need}`),
         bar((cat.level - 1) / (HARVEST_LEVEL - 1), `다 크기까지 Lv.${cat.level} / ${HARVEST_LEVEL}`)
@@ -165,7 +232,7 @@ function renderHistory(collection: Completed[]): HTMLElement {
     for (const c of [...collection].reverse()) {
         const row = el('div', 'row')
         const text = el('div')
-        text.append(el('b', '', coatName(c.coat)), el('small', '', `${day(c.completedAt)} · ${gearText(c.gear)}`))
+        text.append(el('b', '', c.name ? `${c.name} (${coatName(c.coat)})` : coatName(c.coat)), el('small', '', `${day(c.completedAt)} · ${gearText(c.gear)}`))
         row.append(catCanvas(c, 1), text)
         box.append(row)
     }
@@ -173,10 +240,12 @@ function renderHistory(collection: Completed[]): HTMLElement {
 }
 
 function render(state: AppState): void {
+    const typing = document.activeElement instanceof HTMLInputElement
     latest = state
+    if (typing) return // 이름을 입력하는 중에는 화면을 그대로 둔다 (저장하면 다시 그린다)
     renderBanner(state)
     renderFurniture(state.levelUps, state.collection.length)
-    content.replaceChildren(renderNow(state.cat), renderBook(state.collection), renderHistory(state.collection))
+    content.replaceChildren(renderNow(state.cat), renderWeek(state.stats), renderBook(state.collection), renderHistory(state.collection))
 }
 
 void window.api.getState().then((s) => {

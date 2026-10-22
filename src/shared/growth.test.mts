@@ -1,6 +1,6 @@
 // 실행: npm test
 import assert from 'node:assert/strict'
-import {COATS, GEAR, rarityOf, GEAR_LEVEL, HARVEST_LEVEL, INITIAL_CAT, STAGES, addXp, grantGear, harvestIfReady, newCat, stageOf, xpToNextLevel} from './growth.ts'
+import {COATS, GEAR, callName, cleanName, rarityOf, GEAR_LEVEL, HARVEST_LEVEL, INITIAL_CAT, STAGES, addXp, grantGear, harvestIfReady, newCat, stageOf, xpToNextLevel} from './growth.ts'
 
 // 레벨업 경계: 100xp면 정확히 레벨 2, 99.9는 그대로
 assert.deepEqual(addXp(INITIAL_CAT, 100), {...INITIAL_CAT, level: 2, xp: 0})
@@ -55,5 +55,14 @@ assert.equal(not.collection.length, 0)
 assert.equal(rarityOf('orange'), 'common')
 assert.equal(rarityOf('british'), 'uncommon')
 assert.equal(rarityOf('ragdoll'), 'rare')
+
+// 이름: 다듬고 자르고, 비우면 없음. 다 크면 이름도 도감에 남는다
+assert.equal(cleanName('  나비  '), '나비')
+assert.equal(cleanName('가'.repeat(30)), '가'.repeat(16))
+assert.equal(cleanName('   '), undefined)
+assert.equal(cleanName(3), undefined)
+assert.equal(callName({coat: 'ragdoll'}), '랙돌')
+assert.equal(callName({coat: 'ragdoll', name: '구름'}), '구름')
+assert.equal(harvestIfReady({...INITIAL_CAT, level: HARVEST_LEVEL, name: '구름'}, [], 't').collection[0].name, '구름')
 
 console.log('growth: all checks passed')
