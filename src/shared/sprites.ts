@@ -27,10 +27,10 @@ interface Dim {
 }
 
 const DIMS: Record<StageId, Dim> = {
-    baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 2, tail: 8, tw: 1.2},
+    baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 3, tail: 8, tw: 1.2},
     kitten: {rx: 10.5, ry: 6.5, head: 8, ear: 5, leg: 5, lw: 3, tail: 11, tw: 1.4},
-    young: {rx: 13, ry: 7.5, head: 8, ear: 5, leg: 6, lw: 3, tail: 13, tw: 1.6},
-    adult: {rx: 15, ry: 8.5, head: 8, ear: 5, leg: 7, lw: 3, tail: 15, tw: 1.7}
+    young: {rx: 13, ry: 7.5, head: 8, ear: 5, leg: 6, lw: 4, tail: 13, tw: 1.6},
+    adult: {rx: 15, ry: 8.5, head: 8, ear: 5, leg: 7, lw: 4, tail: 15, tw: 1.7}
 }
 
 // ---- 털 무늬 ----
@@ -85,8 +85,18 @@ const COATS: Record<CoatId, Coat> = {
     sphynx: {colors: {b: '#e8b8a6', s: '#cf9987', d: '#c18a79', l: '#f4d3c5', a: '#e8b8a6'}, eye: AMBER, pattern: 'solid', map: {under: 'l', forehead: 'd'}, ear: 2, thin: true}
 }
 
+const mix = (a: string, b: string, t: number): string =>
+    '#' + [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t).toString(16).padStart(2, '0')).join('')
+
+// 윤곽선은 검은색 하나 대신, 닿아 있는 털 색을 짙게 한 색으로 그린다. (대문자 B S D L A = b s d l a 옆의 윤곽선)
 export const paletteOf = (coat: CoatId): Record<string, string> => ({
     ...COATS[coat].colors,
+    h: mix(COATS[coat].colors.b, '#ffffff', 0.28), // 윗면 하이라이트
+    B: mix(COATS[coat].colors.b, '#2a1f26', 0.62),
+    S: mix(COATS[coat].colors.s, '#2a1f26', 0.62),
+    D: mix(COATS[coat].colors.d, '#2a1f26', 0.55),
+    L: mix(COATS[coat].colors.l, '#2a1f26', 0.5),
+    A: mix(COATS[coat].colors.a, '#2a1f26', 0.62),
     o: '#2a1f26', // 테두리, 입
     q: '#ff9db1', // 볼터치
     p: '#f08fab', // 코, 귀 안쪽
@@ -145,10 +155,10 @@ class Grid {
         return this
     }
 
-    ellipse(cx: number, cy: number, rx: number, ry: number, ch: string, part: Part = this.cur): this {
+    ellipse(cx: number, cy: number, rx: number, ry: number, ch: string, part: Part = this.cur, n = 2): this {
         for (let y = Math.floor(cy - ry); y <= Math.ceil(cy + ry); y++) {
             for (let x = Math.floor(cx - rx); x <= Math.ceil(cx + rx); x++) {
-                if (((x - cx) / rx) ** 2 + ((y - cy) / ry) ** 2 <= 1) this.put(x, y, ch, part)
+                if (Math.abs((x - cx) / rx) ** n + Math.abs((y - cy) / ry) ** n <= 1) this.put(x, y, ch, part)
             }
         }
         return this
@@ -211,67 +221,72 @@ class Grid {
                 this.cells[y][x] = key
             }
         }
+        // 윗면 하이라이트: 위가 비어 있는 기본색 칸 한 줄
+        const above = this.cells.map((r) => [...r])
+        for (let y = 1; y < GRID_H; y++) for (let x = 0; x < GRID_W; x++) if (above[y][x] === 'b' && above[y - 1][x] === '.' && this.parts[y][x] !== 'paw') this.cells[y][x] = 'h'
         return this.cells.map((row, y) =>
             row.map((ch, x) => {
                 if (ch !== '.') return ch
-                return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => this.get(x + dx, y + dy) !== '.') ? 'o' : '.'
+                // 옆에 있는 칸이 털이면 그 색의 윤곽선, 얼굴 부품이면 기본 윤곽선
+                for (const [dx, dy] of [[0, 1], [-1, 0], [1, 0], [0, -1]]) {
+                    const n = this.get(x + dx, y + dy)
+                    if (n === '.') continue
+                    return n === 'h' ? 'B' : 'bsdla'.includes(n) ? n.toUpperCase() : 'o'
+                }
+                return '.'
             }).join(''))
     }
 }
 
-// ---- 얼굴 (정면) ----
-// 귀엽게 보이는 요소: 몸만큼 큰 머리, 낮게 달린 큼직한 눈(눈빛 두 개), 볼살, 볼터치, 작은 코와 입.
+// ---- 얼굴 (3/4 옆모습, 오른쪽을 봄) ----
+// 몸과 같은 방향을 보는 얼굴이라 몸에 얼굴을 붙인 느낌이 덜하다. 앞쪽 눈은 크고 뒤쪽 눈은 반쯤 가려진다.
 function face(g: Grid, hx: number, hy: number, d: Dim, closed: boolean): void {
     hx = Math.round(hx)
     hy = Math.round(hy)
-    const rx = d.head * 1.1, ry = d.head * 0.92
+    const rx = d.head * 1.05, ry = d.head * 0.9
     g.headO = [hx, hy]
-    g.at('head').ellipse(hx, hy, rx, ry, 'b')
-    for (const sgn of [-1, 1]) g.ellipse(hx + sgn * rx * 0.72, hy + ry * 0.5, rx * (g.look.cheek ?? 0.3), ry * (g.look.cheek ?? 0.3), 'b') // 볼살
-    // 귀: 끝이 뾰족한 삼각형, 안쪽은 분홍
+    g.at('head').ellipse(hx, hy, rx, ry, 'b', 'head', 2.4)
+    g.ellipse(hx - rx * 0.5, hy + ry * 0.7, rx * 0.35, ry * 0.3, 'b', 'head') // 볼 털
+    g.ellipse(hx + rx * 0.78, hy + ry * 0.38, rx * 0.36, ry * 0.32, 'b', 'muzzle') // 튀어나온 주둥이
+    // 귀: 가까운 귀는 크고, 먼 귀는 조금 작다. 안쪽은 분홍.
     const earH = d.ear + (g.look.ear ?? 0)
-    const wmax = Math.max(3, Math.round(d.head * 0.6))
-    for (const sgn of [-1, 1]) {
+    const wmax = Math.max(3, Math.round(d.head * 0.55))
+    for (const [fx, tall] of [[-0.42, 0], [0.5, 1]] as const) {
+        const ex = Math.round(hx + rx * fx)
         if (g.look.fold) {
-            // 접힌 귀: 머리 위 옆에 납작하게 붙는다
-            const fx = Math.round(hx + sgn * rx * 0.7)
-            g.rect(fx - 2, hy - ry + 1, fx + 2, hy - ry + 2, 'b', 'ear').rect(fx - 1, hy - ry, fx + 1, hy - ry, 'b', 'ear')
+            // 접힌 귀: 머리 위에 납작하게 붙는다
+            g.rect(ex - 2, hy - ry + 1, ex + 2, hy - ry + 2, 'b', 'ear').rect(ex - 1, hy - ry, ex + 1, hy - ry, 'b', 'ear')
             continue
         }
-        const ex = Math.round(hx + sgn * rx * 0.62)
-        const top = Math.round(hy - ry - earH + 2)
+        const h = earH - tall
+        const top = Math.round(hy - ry - h + 2)
         if (g.look.tufts) g.put(ex, top - 1, 'b', 'ear').put(ex, top - 2, 'b', 'ear') // 귀 끝 털
-        for (let i = 0; i < earH; i++) {
-            const w = 1 + Math.round((i * (wmax - 1)) / (earH - 1))
+        for (let i = 0; i < h; i++) {
+            const w = 1 + Math.round((i * (wmax - 1)) / (h - 1))
             g.rect(ex - Math.floor((w - 1) / 2), top + i, ex + Math.ceil((w - 1) / 2), top + i, 'b', 'ear')
             if (i >= 2 && w >= 4) g.rect(ex - Math.floor((w - 3) / 2), top + i, ex + Math.ceil((w - 3) / 2), top + i, 'p', 'ear')
         }
     }
     // 이마 줄무늬 자리 (줄무늬 털에서만 짙게 칠해진다)
-    for (const [dx, len] of [[-3, 2], [0, 4], [3, 2]] as const) g.rect(hx + dx, hy - ry + 1, hx + dx, hy - ry + len, 'b', 'forehead')
-    // 눈: 모서리를 둥글린 n x n 홍채, 큰 눈동자, 눈빛 (머리가 작으면 한 칸 작게)
-    const n = d.head >= 10 ? 5 : 4
-    const y0 = Math.round(hy + ry * 0.02)
-    for (const sgn of [-1, 1]) {
-        const x0 = Math.round(hx + sgn * rx * 0.47 - n / 2)
+    for (const [dx, len] of [[-1, 2], [2, 3], [5, 2]] as const) g.rect(hx + dx, hy - ry + 1, hx + dx, hy - ry + len, 'b', 'forehead')
+    // 눈: 앞쪽(가까운) 눈은 4x5, 뒤쪽 눈은 3x5. 모서리를 둥글리고, 세로로 긴 눈동자와 눈빛을 넣는다.
+    const ey = Math.round(hy - ry * 0.28)
+    const eye = (x0: number, w: number): void => {
         if (closed) {
-            // 웃는 모양(^)으로 감은 눈
-            g.put(x0, y0 + n - 2, 'o', 'head').put(x0 + n - 1, y0 + n - 2, 'o', 'head')
-            g.rect(x0 + 1, y0 + n - 3, x0 + n - 2, y0 + n - 3, 'o', 'head')
-            continue
+            g.put(x0, ey + 3, 'o', 'head').put(x0 + w - 1, ey + 3, 'o', 'head')
+            g.rect(x0 + 1, ey + 2, x0 + w - 2, ey + 2, 'o', 'head')
+            return
         }
-        for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (!((r === 0 || r === n - 1) && (c === 0 || c === n - 1))) g.put(x0 + c, y0 + r, 'y', 'head')
-        g.rect(x0 + 1, y0 + 1, x0 + n - 2, y0 + n - 1, 'e', 'head')
-        g.rect(x0 + 1, y0 + 1, x0 + (n >= 5 ? 2 : 1), y0 + (n >= 5 ? 2 : 1), 'w', 'head') // 큰 눈빛
-        g.put(x0 + n - 2, y0 + n - 1, 'w', 'head') // 작은 눈빛
-        const bx = Math.round(hx + sgn * (rx * 0.47 + n / 2 + 2.2))
-        g.rect(bx - 1, y0 + n - 1, bx + 1, y0 + n - 1, 'q', 'head') // 볼터치
+        for (let r = 0; r < 5; r++) for (let c = 0; c < w; c++) if (!((r === 0 || r === 4) && (c === 0 || c === w - 1))) g.put(x0 + c, ey + r, 'y', 'head')
+        g.rect(x0 + 1, ey + 1, x0 + w - 2, ey + 4, 'e', 'head')
+        g.put(x0 + 1, ey + 1, 'w', 'head')
     }
-    // 주둥이, 코, 입
-    const ny = y0 + n - (g.look.flat ? 3 : 2) // 납작한 얼굴은 코가 눈 높이로 올라온다
-    g.ellipse(hx, ny + 1.5, rx * 0.32, ry * 0.26, 'b', 'muzzle')
-    g.rect(hx - 1, ny, hx + 1, ny, 'p', 'head').put(hx, ny + 1, 'o', 'head')
-    g.put(hx - 1, ny + 2, 'o', 'head').put(hx + 1, ny + 2, 'o', 'head')
+    eye(Math.round(hx + rx * 0.1), 4)
+    eye(Math.round(hx + rx * 0.62), 3)
+    // 코와 입
+    const nx = Math.round(hx + rx * 1.08), ny = Math.round(hy + ry * 0.22)
+    g.rect(nx - 1, ny, nx, ny, 'p', 'head')
+    g.put(nx - 1, ny + 2, 'o', 'head').put(nx - 2, ny + 3, 'o', 'head').put(nx - 3, ny + 3, 'o', 'head')
 }
 
 // ---- 서 있는 포즈 (걷기, 달리기, 뛰기) ----
@@ -322,14 +337,16 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(back + 3, m.feet[3], false)
 
     // 몸통
-    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b')
+    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.6)
+    g.ellipse(bx - d.rx * 0.45, by + 1, d.rx * 0.4, d.ry * 0.95, 'b', 'body') // 엉덩이(허벅지) 살
+    g.ellipse(bx + d.rx - 5, by - d.ry * 0.3, 5, d.ry * 0.8, 'b', 'body') // 목
     g.retag(bx - d.rx, by + d.ry * 0.4, bx + d.rx, by + d.ry, 'body', 'under') // 배
     g.retag(bx + d.rx * 0.55, by - d.ry * 0.3, bx + d.rx, by + d.ry * 0.4, 'body', 'chest') // 가슴
 
     leg(front, m.feet[0], true)
     leg(back, m.feet[2], true)
 
-    face(g, bx + d.rx - 3, by - d.ry * 0.5 + m.headDy, d, false)
+    face(g, bx + d.rx - 4, by - d.ry * 0.5 + m.headDy, d, false)
 }
 
 // ---- 앉은 포즈 ----

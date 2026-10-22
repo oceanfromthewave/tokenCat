@@ -3,9 +3,9 @@ import {INITIAL_CAT, coatName, formatXp, stageOf, xpToNextLevel, type CatState} 
 import {FRAMES, GRID_H, GRID_W, frameOf, paletteOf, type Pose} from '../../shared/sprites'
 import './styles.css'
 
-const P = 3 // 도트 한 칸의 화면 크기(px)
+const P = 2 // 도트 한 칸의 화면 크기(px)
 const EDGE = 2 // 그림 좌우 빈칸(칸). 이만큼은 화면 밖으로 나가도 된다.
-const LEAP_HEIGHT = 32 // 뛰어오르는 높이(px)
+const LEAP_HEIGHT = 22 // 뛰어오르는 높이(px)
 const EXCITED_MS = 12_000 // 경험치를 얻고 신나 있는 시간
 const SLEEPY_MS = 15 * 60_000 // 이만큼 조용하면 졸린다
 

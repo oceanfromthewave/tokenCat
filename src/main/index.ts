@@ -11,7 +11,7 @@ import {trayIcon} from './trayIcon'
 
 const TEST_PROVIDER = 'test'
 const TEST_TOKENS = 30 * TOKENS_PER_XP // 테스트 1회당 30xp. 렌더러가 수치를 보내지 못하게 main에서 고정한다.
-const WIN_H = 220 // 고양이 + 말풍선 + 뛰어오를 높이. 고양이가 없는 곳은 클릭이 그대로 통과한다.
+const WIN_H = 160 // 고양이 + 말풍선 + 뛰어오를 높이. 고양이가 없는 곳은 클릭이 그대로 통과한다.
 const POLL_MS = 30_000
 
 // 고양이 상태의 단일 출처. 렌더러는 IPC로 읽고 변경 알림을 받는다.
