@@ -1,0 +1,69 @@
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: 'Malgun Gothic', 'Segoe UI', sans-serif;
+  user-select: none;
+}
+
+#cat {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+}
+
+#sprite {
+  display: block;
+  image-rendering: pixelated;
+}
+
+/* 자는 동안 떠오르는 z. 고양이가 뒤집혀도 글자는 뒤집히지 않게 캔버스와 따로 둔다. */
+#zzz {
+  position: absolute;
+  top: 0;
+  font-size: 14px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 0 0 3px #2a1f26, 0 0 3px #2a1f26;
+  opacity: 0;
+}
+
+#zzz.on {
+  animation: float 2.4s ease-out infinite;
+}
+
+@keyframes float {
+  0% { opacity: 0; transform: translateY(8px); }
+  30% { opacity: 1; }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+
+#bubble {
+  position: absolute;
+  display: none;
+  transform: translate(-50%, -100%);
+  padding: 4px 9px;
+  border: 2px solid #2a1f26;
+  border-radius: 8px;
+  background: #fff8ec;
+  color: #2a1f26;
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: center;
+  pointer-events: none;
+}
+
+#bubble .bar {
+  height: 4px;
+  margin-top: 3px;
+  border-radius: 2px;
+  background: #e6d6bd;
+  overflow: hidden;
+}
+
+#bubble .bar i {
+  display: block;
+  height: 100%;
+  background: #ec9f4a;
+}

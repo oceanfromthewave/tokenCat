@@ -1,0 +1,26 @@
+{
+  "name": "tokencat",
+  "version": "0.1.0",
+  "description": "AI 사용 기록으로 키우는 작업표시줄 고양이",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/**/*.test.mts\"",
+    "preview:sprites": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/previewSprites.mts",
+    "build:win": "electron-vite build && electron-builder --win",
+    "build:unpack": "electron-vite build && electron-builder --dir"
+  },
+  "keywords": [],
+  "author": "Token Cat",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "electron": "^39.8.10",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.7"
+  }
+}

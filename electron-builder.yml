@@ -1,0 +1,16 @@
+appId: com.tokencat.app
+productName: Token Cat
+directories:
+  output: dist
+files:
+  - out/**
+  - package.json
+win:
+  target:
+    - target: nsis
+      arch: x64
+nsis:
+  oneClick: false # 설치 경로를 사용자가 고를 수 있게 한다
+  allowToChangeInstallationDirectory: true
+  runAfterFinish: false
+  artifactName: TokenCat-Setup-${version}.${ext}
