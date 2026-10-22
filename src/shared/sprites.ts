@@ -29,8 +29,8 @@ interface Dim {
 const DIMS: Record<StageId, Dim> = {
     baby: {rx: 8, ry: 5.5, head: 7.5, ear: 4, leg: 4, lw: 3, tail: 8, tw: 1.2},
     kitten: {rx: 10.5, ry: 6.5, head: 8, ear: 5, leg: 5, lw: 3, tail: 11, tw: 1.4},
-    young: {rx: 13, ry: 7.5, head: 8, ear: 5, leg: 6, lw: 4, tail: 13, tw: 1.6},
-    adult: {rx: 15, ry: 8.5, head: 8, ear: 5, leg: 7, lw: 4, tail: 15, tw: 1.7}
+    young: {rx: 12, ry: 6, head: 8, ear: 5, leg: 7, lw: 4, tail: 13, tw: 1.6},
+    adult: {rx: 14, ry: 6.5, head: 8, ear: 5, leg: 8, lw: 4, tail: 15, tw: 1.7}
 }
 
 // ---- 털 무늬 ----
@@ -402,7 +402,7 @@ function stand(g: Grid, d: Dim, m: Move): void {
     leg(back + 3, m.feet[3], false)
 
     // 몸통
-    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 2.3)
+    g.at('body').ellipse(bx, by, d.rx, d.ry, 'b', 'body', 3.2) // 끝이 뭉툭한 몸통 (타원이면 양끝이 뾰족해 생선처럼 보인다)
     g.ellipse(bx - d.rx * 0.45, by + 1, d.rx * 0.4, d.ry * 0.95, 'b', 'body') // 엉덩이(허벅지) 살
     g.ellipse(bx + d.rx - 5, by - d.ry * 0.3, 5, d.ry * 0.8, 'b', 'body') // 목
     g.retag(bx - d.rx, by + d.ry * 0.4, bx + d.rx, by + d.ry, 'body', 'under') // 배
